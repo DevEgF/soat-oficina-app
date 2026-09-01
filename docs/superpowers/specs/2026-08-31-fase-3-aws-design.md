@@ -86,9 +86,8 @@ flowchart LR
     AZ -->|autorizado| VPCL[VPC Link]
     APIGW -->|rotas Spring permitidas| VPCL
     VPCL --> NLB[NLB interno]
-    NLB --> ING[Ingress no EKS]
-    ING --> HML[Namespace hml]
-    ING --> PROD[Namespace prod]
+    NLB -->|listener 8080 / NodePort 30080| HML[Namespace hml]
+    NLB -->|listener 8081 / NodePort 30081| PROD[Namespace prod]
     HML --> RDS
     PROD --> RDS
     HML --> CW[CloudWatch + ADOT]
@@ -104,7 +103,7 @@ flowchart LR
 
 ### 5.1 Entrada e roteamento
 
-Serão expostos endpoints distintos para `hml` e `prod`. Cada ambiente terá configuração própria no API Gateway, mas ambos usarão o mesmo VPC Link e o mesmo NLB interno. O NLB entrega o tráfego a um ingress no EKS, que encaminha para o namespace correto.
+Serão expostos endpoints HTTP API distintos para `hml` e `prod`. Ambos usarão o mesmo VPC Link e o mesmo NLB interno. O NLB terá um listener e target group por ambiente: porta 8080 para o Service NodePort 30080 de `hml` e porta 8081 para o NodePort 30081 de `prod`. Assim, o Gateway escolhe o ambiente pelo listener da integração, sem ingress controller adicional.
 
 Rotas mínimas:
 
@@ -205,7 +204,7 @@ Responsável por:
 - VPC, subnets, rotas, security groups e endpoints necessários;
 - EKS, managed node group `t3.medium` e access entries;
 - ECR;
-- NLB interno compartilhado e ingress controller que roteia por ambiente;
+- NLB interno compartilhado, dois listeners, dois target groups e attachments ao node group;
 - EKS add-ons: Metrics Server e CloudWatch Observability;
 - permissões mínimas para CloudWatch, X-Ray e acesso a secrets;
 - dashboards, alarmes técnicos e SNS compartilhados;
@@ -242,7 +241,7 @@ Responsável por:
 - migrations Flyway;
 - Dockerfile;
 - Helm chart/manifests para `hml` e `prod`;
-- regras de ingress que encaminham para o namespace correto;
+- Services NodePort fixos: 30080 em `hml` e 30081 em `prod`;
 - HPA de 1 a 3 pods;
 - rotas de cliente protegidas e autorização por scope;
 - logs JSON, correlação e métricas de negócio;
