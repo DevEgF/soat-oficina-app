@@ -6,6 +6,9 @@ Monólito **Kotlin** com **Spring Boot** (JPA, Flyway, Spring Security OAuth2 Re
 
 A documentação C4 completa (System Context, Container, Component, ER diagram e fluxos de negócio) está em [`oficina/docs/c4/`](oficina/docs/c4/) — veja o **[índice completo](oficina/docs/c4/INDEX.md)** para navegar por todos os diagramas e roteiros de leitura.
 
+O contrato congelado entre os quatro repositórios da Fase 3 está em
+[`docs/architecture/integration-contracts.md`](docs/architecture/integration-contracts.md).
+
 ## Stack
 
 **Backend** (`oficina/`)
