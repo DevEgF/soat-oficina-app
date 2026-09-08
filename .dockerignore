@@ -1,4 +1,7 @@
 oficina/build
 oficina/.gradle
+.gradle-user-home
+.tmp-jdk17
+.tmp-jdk17.zip
 .git
 .idea

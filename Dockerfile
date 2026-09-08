@@ -4,8 +4,12 @@
 FROM gradle:9.4.0-jdk17 AS build
 WORKDIR /workspace
 COPY oficina/ .
+ARG BUILD_TEST_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/oficina
+ARG BUILD_TEST_DATASOURCE_USERNAME=oficina
 RUN chmod +x gradlew \
-	&& ./gradlew bootJar --no-daemon -x test \
+	&& SPRING_DATASOURCE_URL="$BUILD_TEST_DATASOURCE_URL" \
+	SPRING_DATASOURCE_USERNAME="$BUILD_TEST_DATASOURCE_USERNAME" \
+	./gradlew --no-daemon check bootJar \
 	&& cp "build/libs/$(ls build/libs | grep -v plain | grep '\.jar$' | head -n1)" /workspace/application.jar
 
 # ---------- Runtime stage ----------

@@ -84,6 +84,20 @@ jobs:
     name: Build & Push image
     runs-on: ubuntu-latest
     needs: build-test
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: oficina
+          POSTGRES_USER: oficina
+          POSTGRES_PASSWORD: oficina
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     # Roda em PR também, para validar que a imagem builda antes do merge — mas só
     # publica no GHCR (login + push real) quando é push na main/tag, evitando
     # poluir o registry com imagens de branch/PR de desenvolvimento.
@@ -123,6 +137,7 @@ jobs:
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          add-hosts: host.docker.internal=host-gateway
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -135,6 +150,20 @@ jobs:
     name: Deploy to kind (smoke)
     runs-on: ubuntu-latest
     needs: docker
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: oficina
+          POSTGRES_USER: oficina
+          POSTGRES_PASSWORD: oficina
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
 
@@ -145,7 +174,7 @@ jobs:
 
       - name: Build image and load into kind
         run: |
-          docker build -t oficina-app:ci -f Dockerfile .
+          docker build --add-host host.docker.internal=host-gateway -t oficina-app:ci -f Dockerfile .
           kind load docker-image oficina-app:ci --name oficina
 
       - name: Apply manifests
