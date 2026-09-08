@@ -8,4 +8,5 @@ data class Customer(
 	val name: String,
 	val email: String? = null,
 	val phone: String? = null,
+	val status: CustomerStatus = CustomerStatus.ACTIVE,
 )
