@@ -134,8 +134,8 @@ class WorkOrderApplicationServiceTest {
 	inner class GivenTracking {
 
 		@Test
-		@DisplayName("when track with wrong document then throws")
-		fun wrongDocument() {
+		@DisplayName("when track with another customer id then returns the same not found error as an unknown order")
+		fun wrongOwner() {
 			val wo = WorkOrder.create(
 				customerId = UUID.randomUUID(),
 				vehicleId = UUID.randomUUID(),
@@ -143,18 +143,26 @@ class WorkOrderApplicationServiceTest {
 				partLines = emptyList(),
 			)
 			every { workOrders.findByTrackingCode(wo.trackingCode) } returns Optional.of(wo)
-			every { customers.findById(wo.customerId) } returns Optional.of(
-				Customer(wo.customerId, TaxDocument.parse("52998224725"), "A"),
-			)
-			assertFailsWith<BusinessRuleException> {
-				service.track("39053344705", wo.trackingCode)
+			val error = assertFailsWith<NotFoundException> {
+				service.trackForCustomer(UUID.randomUUID(), wo.trackingCode)
 			}
+			assertEquals("Work order not found", error.message)
+		}
+
+		@Test
+		@DisplayName("when tracking code is unknown then returns work order not found")
+		fun unknownOrder() {
+			every { workOrders.findByTrackingCode("missing") } returns Optional.empty()
+			val error = assertFailsWith<NotFoundException> {
+				service.trackForCustomer(UUID.randomUUID(), " missing ")
+			}
+			assertEquals("Work order not found", error.message)
 		}
 
 		@Test
 		@DisplayName("when track with matching document then returns masked payload")
 		fun success() {
-			// track() só expõe OS já liberadas ao cliente (a partir de PENDING_APPROVAL).
+			// Customer tracking only exposes work orders released to the customer.
 			val wo = WorkOrder.create(
 				customerId = UUID.randomUUID(),
 				vehicleId = UUID.randomUUID(),
@@ -167,7 +175,7 @@ class WorkOrderApplicationServiceTest {
 			every { vehicles.findById(wo.vehicleId) } returns Optional.of(
 				Vehicle(wo.vehicleId, wo.customerId, LicensePlate.parse("XYZ1234"), "F", "M", 2019),
 			)
-			val r = service.track("52998224725", wo.trackingCode)
+			val r = service.trackForCustomer(wo.customerId, wo.trackingCode)
 			assertEquals(wo.trackingCode, r.trackingCode)
 			assertEquals("XYZ1234", r.vehiclePlate)
 		}
@@ -204,7 +212,7 @@ class WorkOrderApplicationServiceTest {
 			service.sendQuoteToCustomer(id)
 			verify(exactly = 0) { parts.save(any()) }
 			every { workOrders.findByTrackingCode(wo.trackingCode) } returns Optional.of(wo)
-			service.approveCustomerQuote("52998224725", wo.trackingCode)
+			service.approveCustomerQuoteForCustomer(wo.customerId, wo.trackingCode)
 			assertEquals(WorkOrderStatus.AWAITING_PARTS_RELEASE, wo.status)
 			verify(exactly = 0) { parts.save(any()) }
 		}
@@ -281,7 +289,7 @@ class WorkOrderApplicationServiceTest {
 				Vehicle(wo.vehicleId, wo.customerId, LicensePlate.parse("ABC1234"), "F", "M", 2020),
 			)
 			every { workOrders.save(any()) } answers { firstArg() }
-			service.rejectCustomerQuote("52998224725", wo.trackingCode)
+			service.rejectCustomerQuoteForCustomer(wo.customerId, wo.trackingCode)
 			assertEquals(WorkOrderStatus.CANCELLED, wo.status)
 			verify { reservations.cancelPendingForWorkOrder(id) }
 		}
@@ -300,7 +308,7 @@ class WorkOrderApplicationServiceTest {
 				Customer(wo.customerId, TaxDocument.parse("52998224725"), "X"),
 			)
 			assertFailsWith<InvalidStatusTransitionException> {
-				service.approveCustomerQuote("52998224725", wo.trackingCode)
+				service.approveCustomerQuoteForCustomer(wo.customerId, wo.trackingCode)
 			}
 		}
 	}
@@ -503,10 +511,10 @@ class WorkOrderApplicationServiceTest {
 			every { vehicles.findById(wo.vehicleId) } returns Optional.of(
 				Vehicle(wo.vehicleId, wo.customerId, LicensePlate.parse("ABC1234"), "F", "M", 2020),
 			)
-			val first = service.approveCustomerQuote("52998224725", wo.trackingCode)
+			val first = service.approveCustomerQuoteForCustomer(wo.customerId, wo.trackingCode)
 			assertEquals(WorkOrderStatus.AWAITING_PARTS_RELEASE, first.status)
 			// Reenvio da mesma decisão não deve lançar transição inválida (idempotente).
-			val second = service.approveCustomerQuote("52998224725", wo.trackingCode)
+			val second = service.approveCustomerQuoteForCustomer(wo.customerId, wo.trackingCode)
 			assertEquals(WorkOrderStatus.AWAITING_PARTS_RELEASE, second.status)
 		}
 
@@ -522,9 +530,9 @@ class WorkOrderApplicationServiceTest {
 			every { vehicles.findById(wo.vehicleId) } returns Optional.of(
 				Vehicle(wo.vehicleId, wo.customerId, LicensePlate.parse("ABC1234"), "F", "M", 2020),
 			)
-			val first = service.rejectCustomerQuote("52998224725", wo.trackingCode)
+			val first = service.rejectCustomerQuoteForCustomer(wo.customerId, wo.trackingCode)
 			assertEquals(WorkOrderStatus.CANCELLED, first.status)
-			val second = service.rejectCustomerQuote("52998224725", wo.trackingCode)
+			val second = service.rejectCustomerQuoteForCustomer(wo.customerId, wo.trackingCode)
 			assertEquals(WorkOrderStatus.CANCELLED, second.status)
 		}
 	}

@@ -137,14 +137,9 @@ class WorkOrderApplicationService(
 		workOrders.findById(id).map { it.toDto() }.orElseThrow { NotFoundException("Work order not found") }
 
 	@Transactional(readOnly = true)
-	fun track(customerTaxIdDigits: String, trackingCode: String): WorkOrderTrackingResponse {
-		val doc = TaxDocument.parse(customerTaxIdDigits)
-		val wo = workOrders.findByTrackingCode(trackingCode.trim())
-			.orElseThrow { NotFoundException("Work order not found") }
+	fun trackForCustomer(customerId: UUID, trackingCode: String): WorkOrderTrackingResponse {
+		val wo = loadWorkOrderForCustomer(customerId, trackingCode)
 		val customer = customers.findById(wo.customerId).orElseThrow { NotFoundException("Customer not found") }
-		if (customer.fiscalDocument.digits != doc.digits) {
-			throw BusinessRuleException("Document does not match this work order")
-		}
 		if (
 			wo.status == WorkOrderStatus.RECEIVED ||
 			wo.status == WorkOrderStatus.IN_DIAGNOSIS ||
@@ -159,7 +154,7 @@ class WorkOrderApplicationService(
 			statusLabel = wo.status.label,
 			totalCents = wo.totalCents,
 			vehiclePlate = vehicle.licensePlate.normalized,
-			maskedCustomerTaxId = maskTaxId(doc.digits),
+			maskedCustomerTaxId = maskTaxId(customer.fiscalDocument.digits),
 		)
 	}
 
@@ -169,42 +164,40 @@ class WorkOrderApplicationService(
 		else -> "***"
 	}
 
-	private fun loadWorkOrderForCustomer(documentDigits: String, trackingCode: String): WorkOrder {
-		val doc = TaxDocument.parse(documentDigits)
+	private fun loadWorkOrderForCustomer(customerId: UUID, trackingCode: String): WorkOrder {
 		val wo = workOrders.findByTrackingCode(trackingCode.trim())
 			.orElseThrow { NotFoundException("Work order not found") }
-		val customer = customers.findById(wo.customerId).orElseThrow { NotFoundException("Customer not found") }
-		if (customer.fiscalDocument.digits != doc.digits) {
-			throw BusinessRuleException("Document does not match this work order")
+		if (wo.customerId != customerId) {
+			throw NotFoundException("Work order not found")
 		}
 		return wo
 	}
 
 	@Transactional
-	fun approveCustomerQuote(customerTaxIdDigits: String, trackingCode: String): WorkOrderTrackingResponse {
-		val wo = loadWorkOrderForCustomer(customerTaxIdDigits, trackingCode)
+	fun approveCustomerQuoteForCustomer(customerId: UUID, trackingCode: String): WorkOrderTrackingResponse {
+		val wo = loadWorkOrderForCustomer(customerId, trackingCode)
 		// Idempotência: aprovação já aplicada (liberada ao almoxarife ou em execução) não reaplica a transição.
 		if (wo.status == WorkOrderStatus.AWAITING_PARTS_RELEASE || wo.status == WorkOrderStatus.IN_EXECUTION) {
-			return track(customerTaxIdDigits, trackingCode)
+			return trackForCustomer(customerId, trackingCode)
 		}
 		// Swimlane: a aprovação do cliente apenas libera a OS ao almoxarife (AWAITING_PARTS_RELEASE).
 		// A execução só inicia na confirmação de saída das peças (WarehouseApplicationService.confirmStockExitForWorkOrder).
 		wo.approveCustomerQuote(now())
 		workOrders.save(wo)
-		return track(customerTaxIdDigits, trackingCode)
+		return trackForCustomer(customerId, trackingCode)
 	}
 
 	@Transactional
-	fun rejectCustomerQuote(customerTaxIdDigits: String, trackingCode: String): WorkOrderTrackingResponse {
-		val wo = loadWorkOrderForCustomer(customerTaxIdDigits, trackingCode)
+	fun rejectCustomerQuoteForCustomer(customerId: UUID, trackingCode: String): WorkOrderTrackingResponse {
+		val wo = loadWorkOrderForCustomer(customerId, trackingCode)
 		// Idempotência: decisão de recusa reenviada não reaplica a transição.
 		if (wo.status == WorkOrderStatus.CANCELLED) {
-			return track(customerTaxIdDigits, trackingCode)
+			return trackForCustomer(customerId, trackingCode)
 		}
 		cancelReservationsIfAny(wo.id)
 		wo.rejectCustomerQuote(now())
 		workOrders.save(wo)
-		return track(customerTaxIdDigits, trackingCode)
+		return trackForCustomer(customerId, trackingCode)
 	}
 
 	@Transactional

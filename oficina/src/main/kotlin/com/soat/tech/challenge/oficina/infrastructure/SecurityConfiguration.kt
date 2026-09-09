@@ -97,7 +97,7 @@ class SecurityConfiguration {
 				"/swagger-ui.html",
 				"/api/public/auth/login",
 			).permitAll()
-			authorize.requestMatchers("/api/public/os/**").permitAll()
+			authorize.requestMatchers("/api/customer/**").hasAuthority("SCOPE_CUSTOMER")
 			authorize.requestMatchers(
 				"/api/admin/**",
 				"/api/attendant/**",
