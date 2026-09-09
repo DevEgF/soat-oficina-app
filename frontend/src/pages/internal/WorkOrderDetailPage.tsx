@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ArrowLeft } from 'lucide-react'
@@ -55,12 +55,13 @@ export default function WorkOrderDetailPage() {
   const showBudgetSection = wo?.status !== 'RECEIVED'
   const canEditDiagnosisPlan = (scope === 'TECHNICIAN' || scope === 'MASTER') && wo?.status === 'IN_DIAGNOSIS'
 
-  useEffect(() => {
-    if (!wo) return
+  const [previousWorkOrder, setPreviousWorkOrder] = useState<typeof wo>(undefined)
+  if (wo && wo !== previousWorkOrder) {
+    setPreviousWorkOrder(wo)
     setServiceLines(wo.services.map((line) => ({ catalogServiceId: line.catalogServiceId, quantity: line.quantity })))
     setPartLines(wo.parts.map((line) => ({ partId: line.partId, quantity: line.quantity })))
     setNotes(wo.diagnosisNotes ?? '')
-  }, [wo])
+  }
 
   const diagnosisTotals = useMemo(() => {
     const servicesTotal = serviceLines.reduce((sum, line) => {

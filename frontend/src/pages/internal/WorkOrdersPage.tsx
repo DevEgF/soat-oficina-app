@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Plus, Eye, Copy } from 'lucide-react'
@@ -45,7 +45,6 @@ export default function WorkOrdersPage() {
 
   const [filterStatus, setFilterStatus] = useState<WorkOrderStatus | ''>('')
   const [showForm, setShowForm] = useState(false)
-  const [lastLookupCpf, setLastLookupCpf] = useState('')
 
   // Form state
   const [form, setForm] = useState({
@@ -69,6 +68,30 @@ export default function WorkOrdersPage() {
 
   const filtered = filterStatus ? workOrders.filter(w => w.status === filterStatus) : workOrders
 
+  const lookupCpf = onlyDigits(form.customerTaxId)
+  const lookupCustomer = canLookupCustomer && isValidCpf(lookupCpf)
+    ? customerByTaxId.get(lookupCpf) : undefined
+  const lookupVehicle = lookupCustomer ? firstVehicleByCustomer.get(lookupCustomer.id) : undefined
+  const [appliedLookup, setAppliedLookup] = useState<{
+    cpf: string; customer?: CustomerResponse; vehicle?: VehicleResponse
+  }>({ cpf: '' })
+  // Retry when either query arrives, while preserving edits between query updates.
+  if (appliedLookup.cpf !== lookupCpf || appliedLookup.customer !== lookupCustomer || appliedLookup.vehicle !== lookupVehicle) {
+    setAppliedLookup({ cpf: lookupCpf, customer: lookupCustomer, vehicle: lookupVehicle })
+    if (lookupCustomer) {
+      setForm((prev) => ({
+        ...prev,
+        customerName: lookupCustomer.name,
+        customerEmail: lookupCustomer.email ?? '',
+        customerPhone: lookupCustomer.phone ?? '',
+        plate: lookupVehicle?.plate ?? prev.plate,
+        vehicleBrand: lookupVehicle?.brand ?? prev.vehicleBrand,
+        vehicleModel: lookupVehicle?.model ?? prev.vehicleModel,
+        vehicleYear: lookupVehicle?.year ? String(lookupVehicle.year) : prev.vehicleYear,
+      }))
+    }
+  }
+
   function field(key: keyof typeof form) {
     return { value: form[key], onChange: (e: React.ChangeEvent<HTMLInputElement>) => setForm(f => ({ ...f, [key]: e.target.value })) }
   }
@@ -76,40 +99,15 @@ export default function WorkOrdersPage() {
   function handleCustomerTaxIdChange(e: React.ChangeEvent<HTMLInputElement>) {
     const maskedCpf = maskCpf(e.target.value)
     setForm((f) => ({ ...f, customerTaxId: maskedCpf }))
-    if (onlyDigits(maskedCpf).length < 11) {
-      setLastLookupCpf('')
-    }
-  }
-
-  useEffect(() => {
     if (!canLookupCustomer) return
-
-    const cpfDigits = onlyDigits(form.customerTaxId)
+    const cpfDigits = onlyDigits(maskedCpf)
     if (cpfDigits.length !== 11) return
-    if (cpfDigits === lastLookupCpf) return
-
-    setLastLookupCpf(cpfDigits)
     if (!isValidCpf(cpfDigits)) {
       toast.error('CPF inválido. Verifique o número informado.')
       return
     }
 
-    const customer = customerByTaxId.get(cpfDigits)
-    if (!customer) return
-
-    const firstVehicle = firstVehicleByCustomer.get(customer.id)
-    setForm((prev) => ({
-      ...prev,
-      customerTaxId: maskCpf(customer.taxId),
-      customerName: customer.name,
-      customerEmail: customer.email ?? '',
-      customerPhone: customer.phone ?? '',
-      plate: firstVehicle?.plate ?? prev.plate,
-      vehicleBrand: firstVehicle?.brand ?? prev.vehicleBrand,
-      vehicleModel: firstVehicle?.model ?? prev.vehicleModel,
-      vehicleYear: firstVehicle?.year ? String(firstVehicle.year) : prev.vehicleYear,
-    }))
-  }, [canLookupCustomer, customerByTaxId, firstVehicleByCustomer, form.customerTaxId, lastLookupCpf])
+  }
 
   function toggleService(svc: CatalogServiceResponse) {
     setServiceLines(prev => {
@@ -151,7 +149,6 @@ export default function WorkOrdersPage() {
       setShowForm(false)
       setForm({ customerTaxId: '', customerName: '', customerEmail: '', customerPhone: '', plate: '', vehicleBrand: '', vehicleModel: '', vehicleYear: '' })
       setServiceLines([])
-      setLastLookupCpf('')
     } catch { /* interceptor handles */ }
   }
 
