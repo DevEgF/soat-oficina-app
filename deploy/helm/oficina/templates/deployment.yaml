@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "oficina.name" . }}
+  labels:
+    {{- include "oficina.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: application
+  template:
+    metadata:
+      labels:
+        {{- include "oficina.labels" . | nindent 8 }}
+        app.kubernetes.io/component: application
+      annotations:
+        {{- if and .Values.adot.enabled (not .Values.local) }}
+        instrumentation.opentelemetry.io/inject-java: "true"
+        {{- end }}
+        oficina.revision: {{ .Release.Revision | quote }}
+    spec:
+      serviceAccountName: {{ ternary "default" .Values.serviceAccount.name .Values.local }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+        - name: application
+          image: {{ include "oficina.image" . | quote }}
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            {{- include "oficina.env" . | nindent 12 }}
+            - name: SPRING_FLYWAY_ENABLED
+              value: "false"
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            failureThreshold: 60
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+          volumeMounts:
+            {{- include "oficina.mounts" . | nindent 12 }}
+      volumes:
+        {{- include "oficina.volumes" . | nindent 8 }}

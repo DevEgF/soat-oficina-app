@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.http.MediaType
+import org.springframework.http.HttpHeaders
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt
 import org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import kotlin.random.Random
 import java.util.UUID
+import javax.crypto.SecretKey
 
 /**
  * Um caso de integração por fluxo de negócio (swimlane / máquina de estados).
@@ -37,8 +39,12 @@ class SwimlaneFlowsIntegrationTest {
 	@Autowired
 	private lateinit var webApplicationContext: WebApplicationContext
 
+	@Autowired
+	private lateinit var jwtSigningKey: SecretKey
+
 	private val mapper = ObjectMapper()
 	private lateinit var mockMvc: MockMvc
+	private lateinit var customerTokens: CustomerJwtTestTokenFactory
 
 	@BeforeEach
 	fun setup() {
@@ -46,12 +52,15 @@ class SwimlaneFlowsIntegrationTest {
 			.addFilter<DefaultMockMvcBuilder>(CharacterEncodingFilter("UTF-8", true))
 			.apply<DefaultMockMvcBuilder>(springSecurity())
 			.build()
+		customerTokens = CustomerJwtTestTokenFactory(jwtSigningKey)
 	}
+
+	private data class CreatedWorkOrder(val id: String, val trackingCode: String, val customerId: UUID)
 
 	private fun suffix(): String = UUID.randomUUID().toString().substring(0, 8)
 
 	/** Placa válida (padrão antigo ABC9999), única por chamada. */
-	private fun uniquePlate(): String = "ABC${Random.nextInt(1000, 10000)}"
+	private fun uniquePlate(): String = UniqueCustomerFixture.plate()
 
 	private fun postJson(url: String, json: String, scope: String, expected: Int = 200): String =
 		mockMvc.perform(
@@ -86,9 +95,9 @@ class SwimlaneFlowsIntegrationTest {
 		servicoId: String,
 		pecaId: String,
 		partQty: Int,
-		documento: String = "529.982.247-25",
+		documento: String = UniqueCustomerFixture.cpf(),
 		placa: String,
-	): Pair<String, String> {
+	): CreatedWorkOrder {
 		val osJson = postJson(
 			"/api/attendant/ordens-servico",
 			"""
@@ -107,11 +116,16 @@ class SwimlaneFlowsIntegrationTest {
 			201,
 		)
 		val os: JsonNode = mapper.readTree(osJson)
-		return os["id"].asText() to os["trackingCode"].asText()
+		return CreatedWorkOrder(
+			id = os["id"].asText(),
+			trackingCode = os["trackingCode"].asText(),
+			customerId = UUID.fromString(os["customerId"].asText()),
+		)
 	}
 
-	private fun advanceToAguardandoCustomer(servicoId: String, pecaId: String, placa: String): Pair<String, String> {
-		val (osId, codigo) = createOs(servicoId, pecaId, 1, placa = placa)
+	private fun advanceToAguardandoCustomer(servicoId: String, pecaId: String, placa: String): CreatedWorkOrder {
+		val created = createOs(servicoId, pecaId, 1, placa = placa)
+		val osId = created.id
 		mockMvc.perform(
 			post("/api/technician/ordens-servico/$osId/iniciar-diagnostico")
 				.with(jwt().authorities(SimpleGrantedAuthority("SCOPE_TECHNICIAN"))),
@@ -128,7 +142,7 @@ class SwimlaneFlowsIntegrationTest {
 			post("/api/attendant/ordens-servico/$osId/enviar-orcamento-cliente")
 				.with(jwt().authorities(SimpleGrantedAuthority("SCOPE_ATTENDANT"))),
 		).andExpect(status().isOk)
-		return osId to codigo
+		return created
 	}
 
 	@Test
@@ -158,18 +172,19 @@ class SwimlaneFlowsIntegrationTest {
 	fun testCustomerRejectsQuote() {
 		val s = suffix()
 		val (servicoId, pecaId) = seedCatalog(10, 5, "PEC-CR-$s")
-		val (osId, codigo) = advanceToAguardandoCustomer(servicoId, pecaId, uniquePlate())
+		val (osId, codigo, customerId) = advanceToAguardandoCustomer(servicoId, pecaId, uniquePlate())
+		val customerToken = customerTokens.customer(customerId)
 		mockMvc.perform(
-			post("/api/public/os/reprovar-orcamento")
-				.param("documento", "52998224725")
-				.param("codigo", codigo),
+			post("/api/customer/os/reprovar-orcamento")
+				.param("codigo", codigo)
+				.header(HttpHeaders.AUTHORIZATION, "Bearer $customerToken"),
 		)
 			.andExpect(status().isOk)
 			.andExpect(jsonPath("$.status").value("CANCELLED"))
 		mockMvc.perform(
-			get("/api/public/os/acompanhar")
-				.param("documento", "52998224725")
-				.param("codigo", codigo),
+			get("/api/customer/os/acompanhar")
+				.param("codigo", codigo)
+				.header(HttpHeaders.AUTHORIZATION, "Bearer $customerToken"),
 		)
 			.andExpect(status().isOk)
 			.andExpect(jsonPath("$.status").value("CANCELLED"))
@@ -180,19 +195,22 @@ class SwimlaneFlowsIntegrationTest {
 	fun testBudgetDecisionEndpointApprove() {
 		val s = suffix()
 		val (servicoId, pecaId) = seedCatalog(10, 5, "PEC-BD-A-$s")
-		val (_, codigo) = advanceToAguardandoCustomer(servicoId, pecaId, uniquePlate())
+		val (_, codigo, customerId) = advanceToAguardandoCustomer(servicoId, pecaId, uniquePlate())
+		val customerToken = customerTokens.customer(customerId)
 		mockMvc.perform(
-			post("/api/public/os/orcamento/decisao")
+			post("/api/customer/os/orcamento/decisao")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer $customerToken")
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("""{"documento":"52998224725","codigo":"$codigo","decisao":"APROVADO"}"""),
+				.content("""{"codigo":"$codigo","decisao":"APROVADO"}"""),
 		)
 			.andExpect(status().isOk)
 			.andExpect(jsonPath("$.status").value("AWAITING_PARTS_RELEASE"))
 		// reenvio da mesma decisão deve ser idempotente (não quebrar o fluxo)
 		mockMvc.perform(
-			post("/api/public/os/orcamento/decisao")
+			post("/api/customer/os/orcamento/decisao")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer $customerToken")
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("""{"documento":"52998224725","codigo":"$codigo","decisao":"APROVADO"}"""),
+				.content("""{"codigo":"$codigo","decisao":"APROVADO"}"""),
 		)
 			.andExpect(status().isOk)
 			.andExpect(jsonPath("$.status").value("AWAITING_PARTS_RELEASE"))
@@ -203,11 +221,12 @@ class SwimlaneFlowsIntegrationTest {
 	fun testBudgetDecisionEndpointReject() {
 		val s = suffix()
 		val (servicoId, pecaId) = seedCatalog(10, 5, "PEC-BD-R-$s")
-		val (_, codigo) = advanceToAguardandoCustomer(servicoId, pecaId, uniquePlate())
+		val (_, codigo, customerId) = advanceToAguardandoCustomer(servicoId, pecaId, uniquePlate())
 		mockMvc.perform(
-			post("/api/public/os/orcamento/decisao")
+			post("/api/customer/os/orcamento/decisao")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer ${customerTokens.customer(customerId)}")
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("""{"documento":"52998224725","codigo":"$codigo","decisao":"RECUSADO"}"""),
+				.content("""{"codigo":"$codigo","decisao":"RECUSADO"}"""),
 		)
 			.andExpect(status().isOk)
 			.andExpect(jsonPath("$.status").value("CANCELLED"))
@@ -248,11 +267,11 @@ class SwimlaneFlowsIntegrationTest {
 	fun testCompleteWithoutConfirmingStockExit() {
 		val s = suffix()
 		val (servicoId, pecaId) = seedCatalog(10, 5, "PEC-CS-$s")
-		val (osId, codigo) = advanceToAguardandoCustomer(servicoId, pecaId, uniquePlate())
+		val (osId, codigo, customerId) = advanceToAguardandoCustomer(servicoId, pecaId, uniquePlate())
 		mockMvc.perform(
-			post("/api/public/os/aprovar-orcamento")
-				.param("documento", "52998224725")
-				.param("codigo", codigo),
+			post("/api/customer/os/aprovar-orcamento")
+				.param("codigo", codigo)
+				.header(HttpHeaders.AUTHORIZATION, "Bearer ${customerTokens.customer(customerId)}"),
 		).andExpect(status().isOk)
 		mockMvc.perform(
 			post("/api/technician/ordens-servico/$osId/concluir-servicos")

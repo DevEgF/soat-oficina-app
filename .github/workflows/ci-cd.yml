@@ -1,31 +1,15 @@
-name: CI/CD
-
+name: app
 on:
-  push:
-    branches: [main]
-    tags: ["v*"]
   pull_request:
-    branches: [main]
-
-# Necessário para push de imagem no GitHub Container Registry (GHCR).
+  push:
+    branches: [develop, main]
+  workflow_call:
 permissions:
   contents: read
-  packages: write
-
-concurrency:
-  group: ci-cd-${{ github.ref }}
-  cancel-in-progress: true
-
-env:
-  IMAGE_NAME: ghcr.io/${{ github.repository }}
-
 jobs:
-  # 1) Build + testes (com verificação de cobertura JaCoCo >= 80%, já no `check`).
-  build-test:
-    name: Build & Test
+  backend:
+    name: app / backend
     runs-on: ubuntu-latest
-    # Testes de integração conectam num PostgreSQL real (src/test/resources/application-test.properties),
-    # sem H2/Testcontainers — precisa de um serviço de banco disponível no job.
     services:
       postgres:
         image: postgres:16-alpine
@@ -33,159 +17,100 @@ jobs:
           POSTGRES_DB: oficina
           POSTGRES_USER: oficina
           POSTGRES_PASSWORD: oficina
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U oficina" --health-interval 5s --health-timeout 5s --health-retries 10
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: '17'
           cache: gradle
-
-      - name: Grant execute permission to gradlew
-        run: chmod +x ./gradlew
-        working-directory: oficina
-
-      - name: Build (bootJar) + check (testes + JaCoCo)
-        run: ./gradlew --no-daemon check bootJar
-        working-directory: oficina
+      - run: chmod +x oficina/gradlew && ./oficina/gradlew -p oficina --no-daemon check bootJar
         env:
           SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/oficina
           SPRING_DATASOURCE_USERNAME: oficina
           SPRING_DATASOURCE_PASSWORD: oficina
-
-      - name: Upload test & coverage reports
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci && npm run lint && npm test && npm run build
+        working-directory: frontend
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
-        uses: actions/upload-artifact@v4
         with:
-          name: reports
-          path: |
-            oficina/build/reports/tests/
-            oficina/build/reports/jacoco/
-          if-no-files-found: ignore
-
-      - name: Upload bootJar
-        uses: actions/upload-artifact@v4
+          name: backend-reports-${{ github.run_id }}
+          path: oficina/build/reports
+  image:
+    name: app / image
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: oficina
+          POSTGRES_USER: oficina
+          POSTGRES_PASSWORD: oficina
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U oficina" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - run: docker build --add-host host.docker.internal=host-gateway -t oficina:kind-test .
+      - run: docker save oficina:kind-test -o image.tar
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: app-jar
-          path: oficina/build/libs/*.jar
+          name: app-image-${{ github.run_id }}
+          path: image.tar
+          retention-days: 7
           if-no-files-found: error
-
-  # 2) Build da imagem Docker (em PR e push); push real pro GHCR só em push na main/tags.
-  docker:
-    name: Build & Push image
+  helm-smoke:
+    name: app / helm-smoke
+    needs: image
     runs-on: ubuntu-latest
-    needs: build-test
-    # Roda em PR também, para validar que a imagem builda antes do merge — mas só
-    # publica no GHCR (login + push real) quando é push na main/tag, evitando
-    # poluir o registry com imagens de branch/PR de desenvolvimento.
-    outputs:
-      image: ${{ steps.meta.outputs.tags }}
-      version: ${{ steps.meta.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Log in to GHCR
-        if: github.event_name == 'push'
-        uses: docker/login-action@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/download-artifact@v4
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Docker metadata (tags/labels)
-        id: meta
-        uses: docker/metadata-action@v5
+          name: app-image-${{ github.run_id }}
+      - run: docker load -i image.tar
+      - uses: azure/setup-helm@v4.3.1
+      - uses: helm/kind-action@v1
         with:
-          images: ${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=tag
-            type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build & push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile
-          push: ${{ github.event_name == 'push' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  # 3) Deploy num cluster kind EFÊMERO dentro do runner: aplica os manifestos de
-  #    k8s/ (banco + app + HPA) e faz smoke test. Demonstra o deploy de ponta a
-  #    ponta de forma reproduzível, coerente com a decisão de cluster local.
-  #    Roda em PR e push (a imagem é buildada localmente e carregada no kind,
-  #    não depende do GHCR) — assim o deploy é validado antes do merge na main.
-  deploy:
-    name: Deploy to kind (smoke)
-    runs-on: ubuntu-latest
-    needs: docker
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Create kind cluster
-        uses: helm/kind-action@v1
-        with:
-          cluster_name: oficina
-
-      - name: Build image and load into kind
+          cluster_name: oficina-ci
+      - run: python3 -m pip install PyYAML==6.0.3
+      - run: python3 deploy/helm/oficina/tests/render.py
+      - run: helm lint deploy/helm/oficina --namespace hml -f deploy/helm/oficina/tests/fixture-values.yaml
+      - run: pwsh -File scripts/test-workflows.ps1
+      - run: pwsh -File scripts/test-delivery.ps1
+      - run: pwsh -File scripts/test-evidence.ps1
+      - run: |
+          kind load docker-image oficina:kind-test --name oficina-ci
+          kubectl create namespace hml
+          kubectl -n hml apply -f scripts/kind-postgres.yaml
+          kubectl -n hml rollout status deployment/postgres --timeout=180s
+          helm upgrade --install oficina-hml deploy/helm/oficina --namespace hml -f scripts/kind-values.yaml --set demoFixtures.enabled=true --atomic --wait --timeout 10m
+      - name: Smoke local health
+        shell: pwsh
         run: |
-          docker build -t oficina-app:ci -f Dockerfile .
-          kind load docker-image oficina-app:ci --name oficina
-
-      - name: Apply manifests
-        run: |
-          kubectl apply -f k8s/00-namespace.yaml
-          kubectl apply -f k8s/10-configmap.yaml
-          # Secret de teste (o 11-secret.example.yaml é só template; segredos reais não vão pro repo).
-          kubectl -n oficina create secret generic oficina-secret \
-            --from-literal=SPRING_DATASOURCE_PASSWORD=ci-pass \
-            --from-literal=POSTGRES_PASSWORD=ci-pass \
-            --from-literal=APP_JWT_SECRET=ci-jwt-secret-suficientemente-longo-para-testes \
-            --from-literal=APP_SECURITY_ADMIN_PASSWORD=admin \
-            --from-literal=APP_RESEND_API_KEY=
-          kubectl apply -f k8s/20-db.yaml
-          kubectl apply -f k8s/30-app.yaml
-          kubectl apply -f k8s/40-hpa.yaml
-          # Usa a imagem carregada no kind em vez de puxar do GHCR.
-          kubectl -n oficina set image deployment/oficina-app app=oficina-app:ci
-          kubectl -n oficina patch deployment oficina-app \
-            --type=json -p='[{"op":"replace","path":"/spec/template/spec/containers/0/imagePullPolicy","value":"IfNotPresent"}]'
-
-      - name: Wait for rollout
-        run: |
-          kubectl -n oficina rollout status deployment/oficina-db --timeout=180s
-          kubectl -n oficina rollout status deployment/oficina-app --timeout=300s
-
-      - name: Smoke test (/actuator/health)
-        run: |
-          kubectl -n oficina port-forward svc/oficina-app 8080:8080 &
-          PF_PID=$!
-          for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:8080/actuator/health | grep -q '"status":"UP"'; then
-              echo "Health UP"; kill $PF_PID; exit 0
-            fi
-            sleep 3
-          done
-          echo "Health check failed"; kubectl -n oficina get pods; kubectl -n oficina logs deploy/oficina-app --tail=100; kill $PF_PID; exit 1
-
-      - name: Diagnostics on failure
+          $forward = Start-Process kubectl -ArgumentList '-n','hml','port-forward','service/oficina-hml','18080:8080' -PassThru -RedirectStandardOutput /tmp/forward.log -RedirectStandardError /tmp/forward-error.log
+          try { ./scripts/smoke-test.ps1 -ApiUrl http://localhost:18080 -AllowLocal } finally { Stop-Process -Id $forward.Id -ErrorAction SilentlyContinue }
+      - name: Failure diagnostics
         if: failure()
-        run: |
-          kubectl -n oficina get all
-          kubectl -n oficina describe pods
+        run: kubectl -n hml get pods,jobs,events
+  security:
+    name: app / security
+    needs: image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-image-${{ github.run_id }}
+      - run: docker run --rm -v "$PWD:/scan:ro" aquasec/trivy:0.69.3@sha256:bcc376de8d77cfe086a917230e818dc9f8528e3c852f7b1aff648949b6258d1c image --input /scan/image.tar --severity HIGH,CRITICAL --exit-code 1
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '22'
+      - run: npm ci && npm audit --audit-level=high
+        working-directory: frontend

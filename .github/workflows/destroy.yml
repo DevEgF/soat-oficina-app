@@ -1,0 +1,54 @@
+name: destroy-app
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [hml, prod]
+        required: true
+      confirmation:
+        description: Type DESTROY-soat-oficina-app
+        type: string
+        required: true
+permissions:
+  contents: read
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: app-${{ inputs.environment }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      APP_ENVIRONMENT: ${{ inputs.environment }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Confirm application removal before AWS access
+        shell: pwsh
+        run: |
+          if ($env:CONFIRMATION -cne 'DESTROY-soat-oficina-app') { throw 'Exact destroy confirmation required' }
+          $branch = if ($env:APP_ENVIRONMENT -eq 'prod') { 'main' } else { 'develop' }
+          if ($env:GITHUB_REF_NAME -ne $branch) { throw 'Branch does not match environment' }
+      - uses: azure/setup-helm@v4.3.1
+      - uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - env:
+          EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+        run: aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME"
+      - name: Remove only the selected application release and its hook artifacts
+        shell: pwsh
+        run: |
+          $release = "oficina-$env:APP_ENVIRONMENT"
+          helm uninstall $release --namespace $env:APP_ENVIRONMENT --ignore-not-found --wait --timeout 10m
+          if ($LASTEXITCODE -ne 0) { throw 'Application uninstall failed' }
+          $selector = "app.kubernetes.io/instance=$release,oficina.environment=$env:APP_ENVIRONMENT,oficina.hook-resource=true"
+          kubectl -n $env:APP_ENVIRONMENT delete configmap,secretproviderclass,jobs -l $selector --wait --timeout=120s
+          if ($LASTEXITCODE -ne 0) { throw 'Hook cleanup failed' }
+          $pods = kubectl -n $env:APP_ENVIRONMENT get pods -l "app.kubernetes.io/instance=$release" -o json | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or $pods.items.Count -ne 0) { throw 'Application pods remain' }

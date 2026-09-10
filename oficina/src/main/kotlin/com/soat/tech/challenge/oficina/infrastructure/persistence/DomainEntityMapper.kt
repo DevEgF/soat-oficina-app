@@ -1,6 +1,7 @@
 package com.soat.tech.challenge.oficina.infrastructure.persistence
 
 import com.soat.tech.challenge.oficina.domain.model.Customer
+import com.soat.tech.challenge.oficina.domain.model.CustomerStatus
 import com.soat.tech.challenge.oficina.domain.model.TaxDocument
 import com.soat.tech.challenge.oficina.domain.model.PartLine
 import com.soat.tech.challenge.oficina.domain.model.ServiceLine
@@ -23,6 +24,7 @@ fun CustomerEntity.toDomain(): Customer = Customer(
 	name = name,
 	email = email,
 	phone = phone,
+	status = CustomerStatus.valueOf(status),
 )
 
 fun Customer.toEntity(): CustomerEntity = CustomerEntity(
@@ -31,6 +33,7 @@ fun Customer.toEntity(): CustomerEntity = CustomerEntity(
 	name = name,
 	email = email,
 	phone = phone,
+	status = status.name,
 )
 
 fun VehicleEntity.toDomain(): Vehicle = Vehicle(

@@ -19,4 +19,6 @@ class CustomerEntity(
 	var email: String? = null,
 	@Column(length = 50, name = "telefone")
 	var phone: String? = null,
+	@Column(nullable = false, length = 16)
+	var status: String = "ACTIVE",
 )

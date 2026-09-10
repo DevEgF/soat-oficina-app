@@ -1,0 +1,62 @@
+{{- if .Values.demoFixtures.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "oficina.revision" . }}-fixtures
+  labels:
+    {{- include "oficina.labels" . | nindent 4 }}
+    oficina.hook-resource: "true"
+    oficina.revision: {{ .Release.Revision | quote }}
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 120
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels:
+        {{- include "oficina.labels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ ternary "default" .Values.serviceAccount.name .Values.local }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        fsGroup: 1001
+      containers:
+        - name: seed
+          image: {{ include "oficina.image" . | quote }}
+          command:
+            - sh
+            - -ec
+            - |
+              {{- if .Values.local }}
+              export PGUSER=oficina PGPASSWORD=oficina
+              {{- else }}
+              export PGUSER="$(cat /mnt/secrets/spring.datasource.username)"
+              export PGPASSWORD="$(cat /mnt/secrets/spring.datasource.password)"
+              {{- end }}
+              psql -X --set=ON_ERROR_STOP=1 --quiet --file=/etc/oficina/seed.sql
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          env:
+            - name: PGHOST
+              value: {{ .Values.db.endpoint | quote }}
+            - name: PGDATABASE
+              value: oficina
+            - name: PGOPTIONS
+              value: {{ printf "-c search_path=%s" .Values.environment | quote }}
+            - name: PGSSLMODE
+              value: {{ ternary "disable" "verify-full" .Values.local | quote }}
+            - name: PGSSLROOTCERT
+              value: /etc/ssl/certs/aws-rds-global-bundle.pem
+          volumeMounts:
+            {{- include "oficina.mounts" . | nindent 12 }}
+      volumes:
+        {{- include "oficina.volumes" . | nindent 8 }}
+{{- end }}
