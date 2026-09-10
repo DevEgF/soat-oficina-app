@@ -1,6 +1,5 @@
 package com.soat.tech.challenge.oficina.infrastructure
 
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.security.authentication.AuthenticationManager
@@ -28,15 +27,13 @@ class SecurityConfiguration {
 
 	@Bean
 	fun userDetailsService(
-		@Value("\${app.security.admin.password:admin}") adminPassword: String,
+		credentials: StaffCredentials,
 		encoder: PasswordEncoder,
 	): UserDetailsService {
-		// trim: .env / Windows por vezes introduzem espaço ou CRLF e o BCrypt deixa de bater com o Postman
-		val adminSecret = adminPassword.trim()
 		val users = listOf(
 			User.builder()
 				.username("master")
-				.password(encoder.encode("master"))
+				.password(encoder.encode(credentials.passwordFor("master")))
 				.authorities(
 					"SCOPE_MASTER",
 					"SCOPE_ADMIN",
@@ -47,22 +44,22 @@ class SecurityConfiguration {
 				.build(),
 			User.builder()
 				.username("atendente")
-				.password(encoder.encode("atendente"))
+				.password(encoder.encode(credentials.passwordFor("atendente")))
 				.authorities("SCOPE_ATTENDANT")
 				.build(),
 			User.builder()
 				.username("tecnico")
-				.password(encoder.encode("tecnico"))
+				.password(encoder.encode(credentials.passwordFor("tecnico")))
 				.authorities("SCOPE_TECHNICIAN")
 				.build(),
 			User.builder()
 				.username("admin")
-				.password(encoder.encode(adminSecret))
+				.password(encoder.encode(credentials.passwordFor("admin")))
 				.authorities("SCOPE_ADMIN")
 				.build(),
 			User.builder()
 				.username("almoxarife")
-				.password(encoder.encode("almoxarife"))
+				.password(encoder.encode(credentials.passwordFor("almoxarife")))
 				.authorities("SCOPE_WAREHOUSE")
 				.build(),
 		)

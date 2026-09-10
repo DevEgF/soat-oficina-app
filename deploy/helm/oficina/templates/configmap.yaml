@@ -1,0 +1,33 @@
+{{- if not (has .Values.environment (list "hml" "prod")) }}{{ fail "environment must be hml or prod" }}{{ end }}
+{{- if and (not .Values.local) (ne .Release.Namespace .Values.environment) }}{{ fail "AWS namespace must match environment" }}{{ end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "oficina.revision" . }}
+  labels:
+    {{- include "oficina.labels" . | nindent 4 }}
+    oficina.hook-resource: "true"
+    oficina.revision: {{ .Release.Revision | quote }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-30"
+    helm.sh/hook-delete-policy: before-hook-creation
+data:
+  {{- if .Values.demoFixtures.enabled }}
+  seed.sql: |
+    {{- .Files.Get "fixtures/seed.sql" | nindent 4 }}
+  {{- end }}
+  application.properties: |
+    spring.jpa.show-sql=false
+    logging.level.org.hibernate.SQL=OFF
+    logging.structured.format.console=logstash
+    spring.flyway.schemas=${APP_ENVIRONMENT}
+    spring.flyway.default-schema=${APP_ENVIRONMENT}
+    spring.flyway.create-schemas=true
+    {{- if .Values.local }}
+    spring.datasource.url=jdbc:postgresql://${DB_ENDPOINT}:5432/oficina?currentSchema=${APP_ENVIRONMENT}&sslmode=disable
+    spring.datasource.username=oficina
+    spring.datasource.password=oficina
+    {{- else }}
+    spring.datasource.url=jdbc:postgresql://${DB_ENDPOINT}:5432/oficina?currentSchema=${APP_ENVIRONMENT}&sslmode=verify-full&sslrootcert=/etc/ssl/certs/aws-rds-global-bundle.pem
+    {{- end }}

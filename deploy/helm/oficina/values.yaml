@@ -1,0 +1,37 @@
+environment: hml
+image:
+  repository: ""
+  digest: ""
+  tag: ""
+local: false
+demoFixtures:
+  enabled: false
+db:
+  endpoint: ""
+  secretArn: ""
+jwt:
+  secretArn: ""
+staff:
+  secretArn: ""
+awsRegion: us-east-1
+serviceAccount:
+  name: oficina-app
+service:
+  nodePort: 30080
+replicaCount: 1
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+adot:
+  enabled: true
+gitSha: ""
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 768Mi

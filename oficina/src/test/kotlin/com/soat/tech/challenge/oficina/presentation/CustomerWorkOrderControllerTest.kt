@@ -4,13 +4,16 @@ import com.soat.tech.challenge.oficina.application.WorkOrderApplicationService
 import com.soat.tech.challenge.oficina.application.api.dto.WorkOrderTrackingResponse
 import com.soat.tech.challenge.oficina.domain.exception.NotFoundException
 import com.soat.tech.challenge.oficina.domain.model.WorkOrderStatus
+import com.soat.tech.challenge.oficina.domain.port.BusinessMetricsPort
+import com.soat.tech.challenge.oficina.infrastructure.web.CorrelationIdFilter
+import com.soat.tech.challenge.oficina.infrastructure.AppEnvironment
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.context.annotation.Bean
-import org.springframework.context.annotation.Configuration
+import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.security.config.annotation.web.builders.HttpSecurity
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity
 import org.springframework.security.core.authority.SimpleGrantedAuthority
@@ -29,6 +32,7 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers.header
 import org.springframework.test.web.servlet.setup.DefaultMockMvcBuilder
 import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
@@ -39,7 +43,14 @@ import java.util.UUID
 
 @SpringJUnitConfig
 @WebAppConfiguration
-@ContextConfiguration(classes = [CustomerWorkOrderController::class, RestExceptionHandler::class, TestSecurityConfig::class])
+@ContextConfiguration(
+    classes = [
+        CustomerWorkOrderController::class,
+        RestExceptionHandler::class,
+        CorrelationIdFilter::class,
+        TestSecurityConfig::class,
+    ],
+)
 class CustomerWorkOrderControllerTest {
 
     @Autowired
@@ -62,15 +73,17 @@ class CustomerWorkOrderControllerTest {
 
     @BeforeEach
     fun setup() {
-        mockMvc = MockMvcBuilders.webAppContextSetup(context)
-            .apply<DefaultMockMvcBuilder>(springSecurity())
-            .build()
+        val builder: DefaultMockMvcBuilder = MockMvcBuilders.webAppContextSetup(context)
+        builder.addFilters<DefaultMockMvcBuilder>(context.getBean(CorrelationIdFilter::class.java))
+        builder.apply<DefaultMockMvcBuilder>(springSecurity())
+        mockMvc = builder.build()
     }
 
     @Test
     fun `tracking without token returns 401`() {
         mockMvc.perform(get("/api/customer/os/acompanhar").param("codigo", trackingCode))
             .andExpect(status().isUnauthorized)
+            .andExpect(header().exists("X-Correlation-Id"))
     }
 
     @Test
@@ -89,6 +102,24 @@ class CustomerWorkOrderControllerTest {
                 .param("codigo", trackingCode)
                 .with(customerAuthentication("not-a-uuid", "SCOPE_CUSTOMER")),
         ).andExpect(status().isUnauthorized)
+    }
+
+    @Test
+    fun `malformed budget decision json returns 400`() {
+        mockMvc.perform(
+            post("/api/customer/os/orcamento/decisao")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""{"codigo":"$trackingCode","decisao":}""")
+                .with(customerAuthentication(customerId.toString(), "SCOPE_CUSTOMER")),
+        ).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `missing tracking query parameter returns 400`() {
+        mockMvc.perform(
+            get("/api/customer/os/acompanhar")
+                .with(customerAuthentication(customerId.toString(), "SCOPE_CUSTOMER")),
+        ).andExpect(status().isBadRequest)
     }
 
     @Test
@@ -158,7 +189,7 @@ class CustomerWorkOrderControllerTest {
     )
 }
 
-@Configuration
+@TestConfiguration
 @EnableWebSecurity
 @EnableWebMvc
 private class TestSecurityConfig : WebMvcConfigurer {
@@ -168,6 +199,12 @@ private class TestSecurityConfig : WebMvcConfigurer {
 
     @Bean
     fun service(): WorkOrderApplicationService = mockk()
+
+    @Bean
+    fun appEnvironment(): AppEnvironment = AppEnvironment("hml")
+
+    @Bean
+    fun businessMetrics(): BusinessMetricsPort = mockk(relaxed = true)
 
     @Bean
     fun jwtDecoder(): JwtDecoder = mockk()

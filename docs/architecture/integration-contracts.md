@@ -20,6 +20,7 @@ integrações suportadas pela AWS.
 | `lambda_security_group_id` | `soat-oficina-infra-k8s` | `soat-oficina-infra-db`, `soat-oficina-auth` | `string` | No | Shared |
 | `ecr_repository_url` | `soat-oficina-infra-k8s` | `soat-oficina-app` | `string` | No | Shared registry |
 | `jwt_secret_arn` | `soat-oficina-infra-k8s` | `soat-oficina-auth`, `soat-oficina-app` | `string` | Sensitive metadata only | Shared secret, isolated by the JWT `env` claim |
+| `staff_secret_arns` | `soat-oficina-infra-k8s` | `soat-oficina-app` | `map(string)` | Sensitive metadata only | One secret per environment; five staff password fields |
 | `app_pod_identity_role_name` | `soat-oficina-infra-k8s` | `soat-oficina-infra-db` | `string` | No | Shared role |
 | `hml_listener_arn` | `soat-oficina-infra-k8s` | `soat-oficina-auth` | `string` | No | hml |
 | `prod_listener_arn` | `soat-oficina-infra-k8s` | `soat-oficina-auth` | `string` | No | prod |
@@ -31,6 +32,7 @@ integrações suportadas pela AWS.
 | `database_port` | `soat-oficina-infra-db` | `soat-oficina-auth`, `soat-oficina-app` | `number` | No | Shared, value `5432` |
 | `database_name` | `soat-oficina-infra-db` | `soat-oficina-auth`, `soat-oficina-app` | `string` | No | Shared, value `oficina` |
 | `master_secret_arn` | `soat-oficina-infra-db` | `soat-oficina-auth`, `soat-oficina-app` | `string` | Sensitive metadata only | Shared secret with runtime retrieval |
+| `database_kms_key_arn` | `soat-oficina-infra-db` | `soat-oficina-auth` | `string` | No | RDS managed credential key metadata |
 | `rds_security_group_id` | `soat-oficina-infra-db` | delivery verification | `string` | No | Shared |
 | `hml_api_url` | `soat-oficina-auth` | `soat-oficina-app`, Postman and delivery verification | `string` | No | hml |
 | `prod_api_url` | `soat-oficina-auth` | `soat-oficina-app` and delivery verification | `string` | No | prod |
@@ -39,6 +41,7 @@ integrações suportadas pela AWS.
 | `db.endpoint` | `soat-oficina-infra-db` | `soat-oficina-app` Helm chart | `string` | Sensitive metadata only | Shared instance |
 | `db.secretArn` | `soat-oficina-infra-db` | `soat-oficina-app` Helm chart | `string` | Sensitive metadata only | Shared secret with runtime retrieval |
 | `jwt.secretArn` | `soat-oficina-infra-k8s` | `soat-oficina-app` Helm chart | `string` | Sensitive metadata only | Shared secret, environment-bound tokens |
+| `staff.secretArn` | `soat-oficina-infra-k8s` | `soat-oficina-app` Helm chart | `string` | Sensitive metadata only | Selected environment's staff secret |
 | `environment` | GitHub branch and Environment | `soat-oficina-app` Helm chart | `string` constrained to `hml` or `prod` | No | One selected environment |
 | `namespace` | `soat-oficina-app` workflow | `soat-oficina-app` Helm release | `string` | No | `hml` or `prod` |
 
@@ -71,6 +74,10 @@ Store integration retrieves values only inside the workload.
 | `EKS_CLUSTER_NAME` | app `hml` and `prod` | Stable cluster name `soat-oficina-eks` |
 | `ECR_REPOSITORY_URL` | app `hml` and `prod` | Immutable application registry output |
 | `API_BASE_URL` | app and auth `hml` and `prod` | API Gateway stage URL used by smoke tests |
+| `DB_ENDPOINT`, `DB_SECRET_ARN` | app `hml` and `prod` | RDS endpoint and managed credentials ARN |
+| `JWT_SECRET_ARN`, `STAFF_SECRET_ARN` | app `hml` and `prod` | Shared JWT ARN and environment-specific staff ARN |
+| `SMOKE_ACTIVE_CPF`, `SMOKE_BLOCKED_CPF`, `SMOKE_UNKNOWN_CPF`, `SMOKE_OTHER_ACTIVE_CPF`, `SMOKE_TRACKING_CODE` | auth `hml` and `prod` | Synthetic acceptance fixtures only; never real customer data |
+| `OTHER_API_URL` | auth `prod` | hml gateway for rejecting cross-environment token replay |
 
 These locations store no GitHub Environment secrets. Authentication uses GitHub
 OIDC and `AWS_ROLE_ARN`; AWS credentials are short-lived and are not committed or

@@ -33,6 +33,7 @@ class CustomerStatusMigrationTest {
 	private lateinit var customerRepository: CustomerRepository
 
 	private var migrationConnection: Connection? = null
+	private lateinit var originalSchema: String
 	private lateinit var migrationJdbcTemplate: JdbcTemplate
 	private lateinit var publicJdbcTemplate: JdbcTemplate
 
@@ -46,19 +47,22 @@ class CustomerStatusMigrationTest {
 				statement.execute("CREATE SCHEMA ${quoted(migrationSchema)}")
 			}
 		}
+		val isolatedConnection = dataSource.connection
+		originalSchema = isolatedConnection.schema
+		isolatedConnection.schema = migrationSchema
+		migrationConnection = isolatedConnection
+		val migrationDataSource = SingleConnectionDataSource(isolatedConnection, true)
+		migrationJdbcTemplate = JdbcTemplate(migrationDataSource)
+		publicJdbcTemplate = JdbcTemplate(dataSource)
 
 		val flywayToV6 = Flyway.configure()
-			.dataSource(dataSource)
+			.dataSource(migrationDataSource)
 			.schemas(migrationSchema)
 			.defaultSchema(migrationSchema)
 			.target("6")
 			.load()
 		flywayToV6.migrate()
 
-		val isolatedConnection = dataSource.connection.apply { schema = migrationSchema }
-		migrationConnection = isolatedConnection
-		migrationJdbcTemplate = JdbcTemplate(SingleConnectionDataSource(isolatedConnection, true))
-		publicJdbcTemplate = JdbcTemplate(dataSource)
 		migrationJdbcTemplate.update(
 			"INSERT INTO clientes(id, documento, nome) VALUES (?, ?, ?)",
 			UUID.randomUUID().toString(),
@@ -67,7 +71,7 @@ class CustomerStatusMigrationTest {
 		)
 
 		Flyway.configure()
-			.dataSource(dataSource)
+			.dataSource(migrationDataSource)
 			.schemas(migrationSchema)
 			.defaultSchema(migrationSchema)
 			.load()
@@ -76,10 +80,13 @@ class CustomerStatusMigrationTest {
 
 	@AfterAll
 	fun removeOwnedMigrationSchema() {
-		migrationConnection?.close()
-		dataSource.connection.use { connection ->
-			connection.createStatement().use { statement ->
-				statement.execute("DROP SCHEMA ${quoted(migrationSchema)} CASCADE")
+		try {
+			migrationConnection?.use { connection -> connection.schema = originalSchema }
+		} finally {
+			dataSource.connection.use { connection ->
+				connection.createStatement().use { statement ->
+					statement.execute("DROP SCHEMA ${quoted(migrationSchema)} CASCADE")
+				}
 			}
 		}
 	}

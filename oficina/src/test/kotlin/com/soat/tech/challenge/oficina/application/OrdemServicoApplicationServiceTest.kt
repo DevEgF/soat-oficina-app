@@ -25,6 +25,8 @@ import com.soat.tech.challenge.oficina.domain.port.PartReservationRepository
 import com.soat.tech.challenge.oficina.domain.port.CatalogServiceRepository
 import com.soat.tech.challenge.oficina.domain.port.VehicleRepository
 import com.soat.tech.challenge.oficina.domain.port.NotificationPort
+import com.soat.tech.challenge.oficina.domain.port.BusinessMetricsPort
+import com.soat.tech.challenge.oficina.domain.port.WorkOrderStage
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -39,6 +41,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import org.springframework.transaction.support.TransactionSynchronizationManager
 
 class WorkOrderApplicationServiceTest {
 
@@ -49,6 +52,7 @@ class WorkOrderApplicationServiceTest {
 	private val parts = mockk<PartRepository>()
 	private val reservations = mockk<PartReservationRepository>()
 	private val notificationPort = mockk<NotificationPort>(relaxed = true)
+	private val businessMetrics = mockk<BusinessMetricsPort>(relaxed = true)
 	private val fixedInstant = Instant.parse("2026-03-01T12:00:00Z")
 	private val clock = Clock.fixed(fixedInstant, ZoneOffset.UTC)
 	private lateinit var service: WorkOrderApplicationService
@@ -68,6 +72,7 @@ class WorkOrderApplicationServiceTest {
 			parts,
 			reservations,
 			notificationPort,
+			businessMetrics,
 			clock,
 		)
 	}
@@ -101,9 +106,19 @@ class WorkOrderApplicationServiceTest {
 				services = listOf(WorkOrderServiceLineRequest(catalogServiceId = sid, quantity = 1)),
 				parts = listOf(WorkOrderPartLineRequest(partId = pid, quantity = 1)),
 			)
-			val r = service.create(req)
-			assertEquals(WorkOrderStatus.RECEIVED, r.status)
-			verify { workOrders.save(any()) }
+			TransactionSynchronizationManager.initSynchronization()
+			try {
+				val r = service.create(req)
+				assertEquals(WorkOrderStatus.RECEIVED, r.status)
+				verify { workOrders.save(any()) }
+				verify(exactly = 0) { businessMetrics.workOrderCreated() }
+
+				every { businessMetrics.workOrderCreated() } throws IllegalStateException("telemetry unavailable")
+				TransactionSynchronizationManager.getSynchronizations().forEach { it.afterCommit() }
+				verify(exactly = 1) { businessMetrics.workOrderCreated() }
+			} finally {
+				TransactionSynchronizationManager.clearSynchronization()
+			}
 		}
 	}
 
@@ -235,6 +250,26 @@ class WorkOrderApplicationServiceTest {
 			assertFailsWith<InsufficientStockException> {
 				service.submitPlanForInternalApproval(id)
 			}
+			verify(exactly = 0) { businessMetrics.stageCompleted(any(), any()) }
+		}
+
+		@Test
+		fun `successful plan submission records diagnosis duration from diagnosed timestamp`() {
+			val id = UUID.randomUUID()
+			val wo = WorkOrder.create(
+				id = id,
+				customerId = UUID.randomUUID(),
+				vehicleId = UUID.randomUUID(),
+				serviceLines = emptyList(),
+				partLines = emptyList(),
+			)
+			wo.startDiagnosis(fixedInstant.minusSeconds(45))
+			every { workOrders.findById(id) } returns Optional.of(wo)
+			every { workOrders.save(any()) } answers { firstArg() }
+
+			service.submitPlanForInternalApproval(id)
+
+			verify(exactly = 1) { businessMetrics.stageCompleted(WorkOrderStage.DIAGNOSIS, java.time.Duration.ofSeconds(45)) }
 		}
 	}
 
@@ -295,6 +330,24 @@ class WorkOrderApplicationServiceTest {
 		}
 
 		@Test
+		fun `successful customer decision records approval duration from quote timestamp`() {
+			val wo = WorkOrder.create(
+				customerId = UUID.randomUUID(),
+				vehicleId = UUID.randomUUID(),
+				serviceLines = emptyList(),
+				partLines = emptyList(),
+			).copy(status = WorkOrderStatus.PENDING_APPROVAL, quoteSentAt = fixedInstant.minusSeconds(12))
+			every { workOrders.findByTrackingCode(wo.trackingCode) } returns Optional.of(wo)
+			every { workOrders.save(any()) } answers { firstArg() }
+			every { customers.findById(wo.customerId) } returns Optional.of(Customer(wo.customerId, TaxDocument.parse("52998224725"), "X"))
+			every { vehicles.findById(wo.vehicleId) } returns Optional.of(Vehicle(wo.vehicleId, wo.customerId, LicensePlate.parse("ABC1234"), "F", "M", 2020))
+
+			service.approveCustomerQuoteForCustomer(wo.customerId, wo.trackingCode)
+
+			verify(exactly = 1) { businessMetrics.stageCompleted(WorkOrderStage.APPROVAL, java.time.Duration.ofSeconds(12)) }
+		}
+
+		@Test
 		@DisplayName("when approveCustomerQuote in wrong status then throws")
 		fun approveWrongStatus() {
 			val wo = WorkOrder.create(
@@ -345,6 +398,7 @@ class WorkOrderApplicationServiceTest {
 			assertFailsWith<IllegalStateException> {
 				service.completeServices(id)
 			}
+			verify(exactly = 0) { businessMetrics.stageCompleted(any(), any()) }
 		}
 
 		@Test
@@ -373,6 +427,7 @@ class WorkOrderApplicationServiceTest {
 			service.completeServices(id)
 			service.registerDelivery(id)
 			assertEquals(WorkOrderStatus.DELIVERED, wo.status)
+			verify(exactly = 1) { businessMetrics.stageCompleted(WorkOrderStage.EXECUTION, java.time.Duration.ZERO) }
 		}
 	}
 

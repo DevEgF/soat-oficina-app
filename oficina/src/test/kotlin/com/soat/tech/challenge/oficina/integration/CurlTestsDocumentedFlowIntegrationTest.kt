@@ -23,14 +23,15 @@ import org.springframework.web.filter.CharacterEncodingFilter
 import kotlin.random.Random
 import kotlin.test.assertTrue
 import java.util.UUID
+import javax.crypto.SecretKey
 
 /**
  * Fluxo ponta a ponta alinhado ao roteiro [CURL_TESTS.md] na raiz do repositório,
- * usando os contratos reais da API (nomes de campos, query params públicos, paths).
+ * usando os contratos reais da API (nomes de campos, autenticação e paths).
  *
  * Diferenças em relação ao markdown legado: login retorna `accessToken`; criação de OS
  * usa `documentoCustomer` / `placa` / linhas de serviço e peça; `submeter-plano` e aprovações
- * internas são POST sem corpo; orçamento público usa `documento` e `codigo` como query params;
+ * internas são POST sem corpo; orçamento do cliente usa JWT com UUID em `sub` e apenas `codigo`;
  * confirmação de saída é `POST /api/warehouse/ordens-servico/{id}/confirmar-saida`;
  * alertas de estoque: `GET /api/warehouse/alertas-estoque-baixo`.
  */
@@ -42,8 +43,12 @@ class CurlTestsDocumentedFlowIntegrationTest {
 	@Autowired
 	private lateinit var webApplicationContext: WebApplicationContext
 
+	@Autowired
+	private lateinit var jwtSigningKey: SecretKey
+
 	private val mapper = ObjectMapper()
 	private lateinit var mockMvc: MockMvc
+	private lateinit var customerTokens: CustomerJwtTestTokenFactory
 
 	@BeforeEach
 	fun setup() {
@@ -51,6 +56,7 @@ class CurlTestsDocumentedFlowIntegrationTest {
 			.addFilter<DefaultMockMvcBuilder>(CharacterEncodingFilter("UTF-8", true))
 			.apply<DefaultMockMvcBuilder>(springSecurity())
 			.build()
+		customerTokens = CustomerJwtTestTokenFactory(jwtSigningKey)
 	}
 
 	private fun suffix(): String = UUID.randomUUID().toString().substring(0, 8)
@@ -101,9 +107,8 @@ class CurlTestsDocumentedFlowIntegrationTest {
 		assertTrue(techToken.isNotBlank() && warehouseToken.isNotBlank())
 
 		val s = suffix()
-		val docDigits = "11222333000181"
-		val docFormatted = "11.222.333/0001-81"
-		val plate = uniquePlate()
+		val docFormatted = UniqueCustomerFixture.cpf()
+		val plate = UniqueCustomerFixture.plate()
 
 		val clienteJson = postBearer(
 			"/api/admin/clientes",
@@ -200,6 +205,7 @@ class CurlTestsDocumentedFlowIntegrationTest {
 		val os: JsonNode = mapper.readTree(osJson)
 		val osId = os["id"].asText()
 		val codigo = os["trackingCode"].asText()
+		val customerToken = customerTokens.customer(UUID.fromString(clienteId))
 
 		mockMvc.perform(
 			post("/api/technician/ordens-servico/$osId/iniciar-diagnostico")
@@ -222,9 +228,9 @@ class CurlTestsDocumentedFlowIntegrationTest {
 		).andExpect(status().isOk)
 
 		mockMvc.perform(
-			post("/api/public/os/aprovar-orcamento")
-				.param("documento", docDigits)
-				.param("codigo", codigo),
+			post("/api/customer/os/aprovar-orcamento")
+				.param("codigo", codigo)
+				.header(HttpHeaders.AUTHORIZATION, "Bearer $customerToken"),
 		)
 			.andExpect(status().isOk)
 			.andExpect(jsonPath("$.status").value("AWAITING_PARTS_RELEASE"))
@@ -246,9 +252,9 @@ class CurlTestsDocumentedFlowIntegrationTest {
 		).andExpect(status().isNoContent)
 
 		mockMvc.perform(
-			get("/api/public/os/acompanhar")
-				.param("documento", docDigits)
-				.param("codigo", codigo),
+			get("/api/customer/os/acompanhar")
+				.param("codigo", codigo)
+				.header(HttpHeaders.AUTHORIZATION, "Bearer $customerToken"),
 		)
 			.andExpect(status().isOk)
 			.andExpect(jsonPath("$.status").value("IN_EXECUTION"))

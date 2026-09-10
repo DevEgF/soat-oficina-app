@@ -5,3 +5,10 @@ oficina/.gradle
 .tmp-jdk17.zip
 .git
 .idea
+.superpowers
+.tmp
+frontend/node_modules
+frontend/dist
+**/.env.local
+**/*.tfstate
+**/*.tfplan

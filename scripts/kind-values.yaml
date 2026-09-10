@@ -1,0 +1,11 @@
+local: true
+environment: hml
+image:
+  repository: oficina
+  tag: kind-test
+db:
+  endpoint: postgres
+autoscaling:
+  enabled: false
+adot:
+  enabled: false
