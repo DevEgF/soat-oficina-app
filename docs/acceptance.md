@@ -1,5 +1,11 @@
 # Aceite da Fase 3
 
+Atualização de escopo em 11/09/2026: após o fechamento local, o usuário autorizou
+finalizar incluindo deploy AWS. O [checklist consolidado](delivery/fase-3-checklist.md)
+separa as evidências registradas das validações em nuvem ainda não concluídas.
+O [roteiro do vídeo](delivery/video-script.md) está preparado para apresentação
+local; a gravação final ainda precisa ser produzida.
+
 Estado em 2026-09-09: implementação revisada e gates locais executados. Nenhum endpoint AWS está apresentado como ativo. A infraestrutura anterior foi destruída; planos Terraform antigos não devem ser reaplicados.
 
 ## Evidência local disponível
