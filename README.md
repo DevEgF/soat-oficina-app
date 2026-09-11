@@ -53,5 +53,6 @@ Os scripts Python de verificação usam PyYAML. Testes de integração usam some
 - [Ambientes compartilhados](docs/adrs/0001-ambientes-compartilhados.md).
 - [Coleção Postman](postman/Fase3.postman_collection.json) e [ambiente sem credenciais](postman/hml.postman_environment.json).
 - [Roteiro e evidências de aceite](docs/acceptance.md).
+- [Checklist consolidado da entrega](docs/delivery/fase-3-checklist.md) e [roteiro do vídeo](docs/delivery/video-script.md).
 
 A configuração de entrega está sendo validada localmente. URLs AWS e evidências de execução em nuvem só são registradas após implantação real; não há endpoint fictício apresentado como ativo.
