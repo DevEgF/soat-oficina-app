@@ -1,9 +1,10 @@
 # Checklist de entrega da Fase 3
 
-Atualizado em 11/09/2026. Escopo autorizado: finalizar localmente, sem criar,
-alterar ou publicar recursos AWS. Não executar bootstrap, apply, deploy,
-promoção ou workflows de nuvem. Os workflows existentes continuam capazes de
-publicar após merges; esta conclusão local não os dispara.
+Atualizado em 11/09/2026. O usuário autorizou a publicação dos commits e,
+posteriormente, a conclusão incluindo deploy. A implantação deve usar planos
+novos e seguir a ordem dos runbooks: bootstrap, fundação, banco, recursos de
+autenticação, aplicação e validação integrada. A autorização não comprova
+execução: os resultados em nuvem serão registrados após os respectivos gates.
 
 ## Implementação e evidências
 
@@ -45,6 +46,6 @@ remota para este checklist.
 O fechamento local não equivale ao aceite integral da entrega em nuvem.
 Homologação e produção ativas, promoção ECR, rollback AWS, jornada Postman
 através do Gateway, dashboards, traces e vídeo final exigem evidências próprias.
-Essas atividades ficam fora desta execução por orientação do usuário.
+Essas atividades estão autorizadas, mas ainda não têm conclusão registrada.
 Planos Terraform e metadados de 08/09 são históricos e não devem ser reutilizados
 como plano de implantação ou prova de disponibilidade atual.

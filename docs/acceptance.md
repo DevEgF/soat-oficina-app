@@ -1,8 +1,8 @@
 # Aceite da Fase 3
 
-Atualização de escopo em 11/09/2026: finalizar somente o trabalho local, sem
-publicar recursos na AWS. O [checklist consolidado](delivery/fase-3-checklist.md)
-separa as evidências registradas das validações em nuvem fora desta execução.
+Atualização de escopo em 11/09/2026: após o fechamento local, o usuário autorizou
+finalizar incluindo deploy AWS. O [checklist consolidado](delivery/fase-3-checklist.md)
+separa as evidências registradas das validações em nuvem ainda não concluídas.
 O [roteiro do vídeo](delivery/video-script.md) está preparado para apresentação
 local; a gravação final ainda precisa ser produzida.
 
