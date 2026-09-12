@@ -33,8 +33,19 @@ class SecurityConfigurationStartupTest {
     @Test
     fun `signing secret preserves accepted raw utf8 bytes`() {
         val raw = " 01234567890123456789012345678901 "
-        val secret = JwtSigningSecret(raw, MockEnvironment().withProperty("unused", "value"))
+        val secret = JwtSigningSecret(MockEnvironment().withProperty(JWT_PROPERTY, raw))
         assertEquals(raw, secret.rawValue)
+    }
+
+    @Test
+    fun `startup treats jwt expression syntax as literal secret bytes`() {
+        val raw = "synthetic-only-key-with-expression-#{not-evaluated"
+        AnnotationConfigApplicationContext().use { context ->
+            context.environment.propertySources.addFirst(MapPropertySource("test", mapOf(JWT_PROPERTY to raw)))
+            context.register(JwtSigningSecret::class.java)
+            context.refresh()
+            assertEquals(raw, context.getBean(JwtSigningSecret::class.java).rawValue)
+        }
     }
 
     @ParameterizedTest
