@@ -8,7 +8,7 @@ foreach ($name in @('IMAGE_DIGEST','ECR_REPOSITORY_URL','DB_ENDPOINT','DB_SECRET
 if ($env:IMAGE_DIGEST -notmatch '^sha256:[a-f0-9]{64}$') { throw 'Invalid immutable image digest' }
 $demoFixtures = if ([string]::IsNullOrEmpty($env:ENABLE_DEMO_FIXTURES)) { 'false' } else { $env:ENABLE_DEMO_FIXTURES }
 if ($demoFixtures -cnotin @('true','false')) { throw 'ENABLE_DEMO_FIXTURES must be true or false' }
-$existingJson = helm list --namespace $Environment --all --filter "^$release`$" --output json
+$existingJson = helm list --namespace $Environment --deployed --failed --pending --superseded --uninstalled --uninstalling --filter "^$release`$" --output json
 if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect existing Helm release; refusing deployment' }
 $existed = @($existingJson | ConvertFrom-Json).Count -gt 0
 $previous = $null

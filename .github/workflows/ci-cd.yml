@@ -76,6 +76,8 @@ jobs:
           name: app-image-${{ github.run_id }}
       - run: docker load -i image.tar
       - uses: azure/setup-helm@v4.3.1
+        with:
+          version: v4.1.4
       - uses: helm/kind-action@v1
         with:
           cluster_name: oficina-ci
