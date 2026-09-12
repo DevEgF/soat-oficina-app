@@ -31,7 +31,8 @@ gitSha: ""
 resources:
   requests:
     cpu: 250m
-    memory: 512Mi
+    # The instrumented JVM uses about 430Mi at idle; keep it below the 80% HPA target.
+    memory: 640Mi
   limits:
     cpu: 1000m
     memory: 768Mi
