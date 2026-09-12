@@ -10,6 +10,9 @@ spec:
     name: {{ include "oficina.name" . }}
   minReplicas: {{ .Values.autoscaling.minReplicas }}
   maxReplicas: {{ .Values.autoscaling.maxReplicas }}
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 120
   metrics:
     - type: Resource
       resource:
