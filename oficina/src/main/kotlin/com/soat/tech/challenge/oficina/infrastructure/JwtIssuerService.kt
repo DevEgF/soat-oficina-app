@@ -19,6 +19,7 @@ import javax.crypto.SecretKey
 class JwtIssuerService(
 	private val jwtSigningKey: SecretKey,
 	private val userDetailsService: UserDetailsService,
+	private val appEnvironment: AppEnvironment,
 	@Value("\${app.jwt.expiration-minutes:60}") private val expirationMinutes: Long,
 ) : TokenIssuerPort {
 
@@ -30,9 +31,11 @@ class JwtIssuerService(
 		val exp = now.plus(expirationMinutes, ChronoUnit.MINUTES)
 		val claims = JWTClaimsSet.Builder()
 			.issuer("oficina")
+			.audience("oficina-api")
 			.issueTime(Date.from(now))
 			.expirationTime(Date.from(exp))
 			.subject(username)
+			.claim("env", appEnvironment.value)
 			.claim("scope", scopeClaim)
 			.build()
 		val header = JWSHeader(JWSAlgorithm.HS256)

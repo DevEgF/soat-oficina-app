@@ -1,0 +1,88 @@
+name: deploy-app
+on:
+  push:
+    branches: [develop, main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  quality:
+    if: github.ref_name == 'develop' || github.ref_name == 'main'
+    uses: ./.github/workflows/ci-cd.yml
+  deploy:
+    needs: quality
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'hml' }}
+    concurrency:
+      group: app-${{ github.ref_name == 'main' && 'prod' || 'hml' }}
+      cancel-in-progress: false
+    env:
+      APP_ENVIRONMENT: ${{ github.ref_name == 'main' && 'prod' || 'hml' }}
+      ECR_REPOSITORY_URL: ${{ vars.ECR_REPOSITORY_URL }}
+      DB_ENDPOINT: ${{ vars.DB_ENDPOINT }}
+      DB_SECRET_ARN: ${{ vars.DB_SECRET_ARN }}
+      JWT_SECRET_ARN: ${{ vars.JWT_SECRET_ARN }}
+      STAFF_SECRET_ARN: ${{ vars.STAFF_SECRET_ARN }}
+      API_BASE_URL: ${{ vars.API_BASE_URL }}
+      ENABLE_DEMO_FIXTURES: ${{ vars.ENABLE_DEMO_FIXTURES }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '22'
+      - uses: azure/setup-helm@v4.3.1
+        with:
+          version: v4.1.4
+      - run: python3 -m pip install PyYAML==6.0.3
+      - uses: actions/download-artifact@v4
+        if: github.ref_name == 'develop'
+        with:
+          name: app-image-${{ github.run_id }}
+      - name: Promote attested hml image without rebuilding
+        if: github.ref_name == 'main'
+        run: node scripts/promote-image.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Push quality-tested hml image
+        if: github.ref_name == 'develop'
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+        run: |
+          aws ecr get-login-password | docker login --username AWS --password-stdin "${ECR_REPOSITORY_URL%%/*}"
+          docker load -i image.tar
+          docker tag oficina:kind-test "${ECR_REPOSITORY_URL}:${RELEASE_SHA}"
+          docker push "${ECR_REPOSITORY_URL}:${RELEASE_SHA}"
+          digest=$(aws ecr describe-images --repository-name "${ECR_REPOSITORY_URL#*/}" --image-ids imageTag="${RELEASE_SHA}" --query 'imageDetails[0].imageDigest' --output text)
+          echo "IMAGE_DIGEST=$digest" >> "$GITHUB_ENV"
+          echo "RELEASE_SHA=$RELEASE_SHA" >> "$GITHUB_ENV"
+      - name: Verify immutable image exists
+        run: aws ecr describe-images --repository-name "${ECR_REPOSITORY_URL#*/}" --image-ids imageDigest="${IMAGE_DIGEST}" --query 'imageDetails[0].imageDigest' --output text
+      - name: Select EKS cluster
+        env:
+          EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+        run: aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME"
+      - name: Deploy and recover on external smoke failure
+        shell: pwsh
+        run: ./scripts/deploy-release.ps1 -Environment $env:APP_ENVIRONMENT
+      - name: Attest successfully deployed hml image
+        if: github.ref_name == 'develop'
+        shell: pwsh
+        run: |
+          @{ sha=$env:RELEASE_SHA; digest=$env:IMAGE_DIGEST; repository=$env:ECR_REPOSITORY_URL; environment='hml' } | ConvertTo-Json | Set-Content release.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: github.ref_name == 'develop'
+        with:
+          name: hml-release-${{ github.sha }}
+          path: release.json
+          retention-days: 30
+          if-no-files-found: error

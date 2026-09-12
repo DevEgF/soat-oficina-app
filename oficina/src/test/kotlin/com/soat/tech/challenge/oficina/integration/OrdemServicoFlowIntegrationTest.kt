@@ -22,6 +22,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 import org.springframework.web.filter.CharacterEncodingFilter
 import java.util.UUID
+import javax.crypto.SecretKey
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -30,9 +31,13 @@ class WorkOrderFlowIntegrationTest {
 	@Autowired
 	private lateinit var webApplicationContext: WebApplicationContext
 
+	@Autowired
+	private lateinit var jwtSigningKey: SecretKey
+
 	private val objectMapper = ObjectMapper()
 
 	private lateinit var mockMvc: MockMvc
+	private lateinit var customerTokens: CustomerJwtTestTokenFactory
 
 	@BeforeEach
 	fun setup() {
@@ -40,6 +45,7 @@ class WorkOrderFlowIntegrationTest {
 			.addFilter<DefaultMockMvcBuilder>(CharacterEncodingFilter("UTF-8", true))
 			.apply<DefaultMockMvcBuilder>(springSecurity())
 			.build()
+		customerTokens = CustomerJwtTestTokenFactory(jwtSigningKey)
 	}
 
 	private fun loginToken(username: String, password: String): String {
@@ -71,6 +77,9 @@ class WorkOrderFlowIntegrationTest {
 
 	@Test
 	fun `fluxo swimlane catalogo peca os reservas almoxarife cliente e metricas`() {
+		val fixtureSuffix = UUID.randomUUID().toString()
+		val fixtureCpf = UniqueCustomerFixture.cpf()
+		val fixturePlate = UniqueCustomerFixture.plate()
 		kotlin.test.assertTrue(loginToken("admin", "admin").isNotBlank())
 
 		val servicoJson = postJsonWithScope(
@@ -83,7 +92,7 @@ class WorkOrderFlowIntegrationTest {
 
 		val pecaJson = postJsonWithScope(
 			"/api/admin/pecas",
-			"""{"code":"FILTRO-01","name":"Filtro oleo","priceCents":3500,"stockQuantity":10,"replenishmentPoint":5}""",
+			"""{"code":"FILTRO-$fixtureSuffix","name":"Filtro oleo","priceCents":3500,"stockQuantity":10,"replenishmentPoint":5}""",
 			"SCOPE_ADMIN",
 			201,
 		)
@@ -93,9 +102,9 @@ class WorkOrderFlowIntegrationTest {
 			"/api/attendant/ordens-servico",
 			"""
 			{
-			  "customerTaxId": "529.982.247-25",
+			  "customerTaxId": "$fixtureCpf",
 			  "customerName": "Maria Teste",
-			  "plate": "ABC1D23",
+			  "plate": "$fixturePlate",
 			  "vehicleBrand": "VW",
 			  "vehicleModel": "Gol",
 			  "vehicleYear": 2020,
@@ -109,6 +118,7 @@ class WorkOrderFlowIntegrationTest {
 		val os: JsonNode = objectMapper.readTree(osJson)
 		val osId = os["id"].asText()
 		val codigo = os["trackingCode"].asText()
+		val customerToken = customerTokens.customer(UUID.fromString(os["customerId"].asText()))
 
 		mockMvc.perform(
 			post("/api/technician/ordens-servico/$osId/iniciar-diagnostico")
@@ -131,9 +141,9 @@ class WorkOrderFlowIntegrationTest {
 		).andExpect(status().isOk).andExpect(jsonPath("$.status").value("PENDING_APPROVAL"))
 
 		mockMvc.perform(
-			post("/api/public/os/aprovar-orcamento")
-				.param("documento", "52998224725")
-				.param("codigo", codigo),
+			post("/api/customer/os/aprovar-orcamento")
+				.param("codigo", codigo)
+				.header(HttpHeaders.AUTHORIZATION, "Bearer $customerToken"),
 		)
 			.andExpect(status().isOk)
 			.andExpect(jsonPath("$.status").value("AWAITING_PARTS_RELEASE"))
@@ -144,13 +154,13 @@ class WorkOrderFlowIntegrationTest {
 		).andExpect(status().isNoContent)
 
 		mockMvc.perform(
-			get("/api/public/os/acompanhar")
-				.param("documento", "52998224725")
-				.param("codigo", codigo),
+			get("/api/customer/os/acompanhar")
+				.param("codigo", codigo)
+				.header(HttpHeaders.AUTHORIZATION, "Bearer $customerToken"),
 		)
 			.andExpect(status().isOk)
 			.andExpect(jsonPath("$.status").value("IN_EXECUTION"))
-			.andExpect(jsonPath("$.vehiclePlate").value("ABC1D23"))
+			.andExpect(jsonPath("$.vehiclePlate").value(fixturePlate))
 
 		mockMvc.perform(
 			post("/api/technician/ordens-servico/$osId/concluir-servicos")

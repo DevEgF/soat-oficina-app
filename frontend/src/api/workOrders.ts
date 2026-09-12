@@ -1,7 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
 import { useAuthStore } from '@/auth/store'
-import type { WorkOrderResponse, CreateWorkOrderRequest, WorkOrderTrackingResponse, UpdateDiagnosisPlanRequest } from '@/lib/types'
+import { trackCustomerWorkOrder, approveCustomerQuote, rejectCustomerQuote } from './customerAuth'
+import type { WorkOrderResponse, CreateWorkOrderRequest, UpdateDiagnosisPlanRequest } from '@/lib/types'
 
 function getListEndpoint(scope: string | null) {
   if (scope === 'MASTER') return '/api/admin/ordens-servico'
@@ -144,34 +145,13 @@ export function useRegisterDelivery() {
 }
 
 export function useTrackWorkOrder() {
-  return useMutation({
-    mutationFn: async ({ documento, codigo }: { documento: string; codigo: string }) => {
-      const { data } = await api.get<WorkOrderTrackingResponse>('/api/public/os/acompanhar', {
-        params: { documento, codigo },
-      })
-      return data
-    },
-  })
+  return useMutation({ mutationFn: trackCustomerWorkOrder })
 }
 
 export function useApproveCustomerQuote() {
-  return useMutation({
-    mutationFn: async ({ documento, codigo }: { documento: string; codigo: string }) => {
-      const { data } = await api.post<WorkOrderTrackingResponse>('/api/public/os/aprovar-orcamento', null, {
-        params: { documento, codigo },
-      })
-      return data
-    },
-  })
+  return useMutation({ mutationFn: approveCustomerQuote })
 }
 
 export function useRejectCustomerQuote() {
-  return useMutation({
-    mutationFn: async ({ documento, codigo }: { documento: string; codigo: string }) => {
-      const { data } = await api.post<WorkOrderTrackingResponse>('/api/public/os/reprovar-orcamento', null, {
-        params: { documento, codigo },
-      })
-      return data
-    },
-  })
+  return useMutation({ mutationFn: rejectCustomerQuote })
 }

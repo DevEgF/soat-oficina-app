@@ -1,73 +1,11 @@
-# React + TypeScript + Vite
+# Oficina frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Run `npm ci`, then `npm run dev`. The staff API uses Vite's `/api` proxy to Spring at `http://localhost:8080` by default.
 
-Currently, two official plugins are available:
+Customer authentication is served by the separate auth Lambda through API Gateway. Spring does not expose `/auth/token`. Copy `.env.example` to `.env.local` and set `VITE_CUSTOMER_API_BASE_URL` to the gateway origin serving both `/auth/token` and `/api/customer/**`. The gateway must allow the frontend origin in CORS. The auth repository currently has no local HTTP runner, so the complete customer browser flow requires the gateway after deployment; local unit tests mock that boundary. Do not deploy AWS just to run these tests.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+`VITE_API_BASE_URL` optionally changes the staff API origin and is also the customer fallback when `VITE_CUSTOMER_API_BASE_URL` is unset. Leave both unset when hosting the frontend behind the same API origin. These are public build-time URLs, never credentials.
 
-## React Compiler
+Customer tokens stay in memory and expire after the authentication response's `expiresIn`. Customer errors do not clear staff login or redirect to the staff login page.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+Validation: `npm run lint`, `npm test`, `npm run build`.

@@ -23,10 +23,15 @@ import com.soat.tech.challenge.oficina.domain.port.PartReservationRepository
 import com.soat.tech.challenge.oficina.domain.port.CatalogServiceRepository
 import com.soat.tech.challenge.oficina.domain.port.VehicleRepository
 import com.soat.tech.challenge.oficina.domain.port.NotificationPort
+import com.soat.tech.challenge.oficina.domain.port.BusinessMetricsPort
+import com.soat.tech.challenge.oficina.domain.port.WorkOrderStage
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.Clock
+import java.time.Duration
 import java.util.UUID
+import org.springframework.transaction.support.TransactionSynchronization
+import org.springframework.transaction.support.TransactionSynchronizationManager
 
 @Service
 class WorkOrderApplicationService(
@@ -37,6 +42,7 @@ class WorkOrderApplicationService(
     private val parts: PartRepository,
     private val reservations: PartReservationRepository,
     private val notificationPort: NotificationPort,
+    private val businessMetrics: BusinessMetricsPort,
     private val clock: Clock,
 ) {
 
@@ -50,6 +56,18 @@ class WorkOrderApplicationService(
 		toResponse({ catalogServiceName(it) }, { partName(it) })
 
 	private fun now() = clock.instant()
+
+	private fun emitAfterCommit(metric: () -> Unit) {
+		if (TransactionSynchronizationManager.isSynchronizationActive()) {
+			TransactionSynchronizationManager.registerSynchronization(object : TransactionSynchronization {
+				override fun afterCommit() {
+					runCatching(metric)
+				}
+			})
+		} else {
+			runCatching(metric)
+		}
+	}
 
 	private fun validateAndReplaceReservations(wo: WorkOrder) {
 		val map = wo.partLines.associate { it.partId to it.quantity }
@@ -122,7 +140,9 @@ class WorkOrderApplicationService(
 			serviceLines = serviceLines,
 			partLines = partLines,
 		)
-		return workOrders.save(wo).toDto()
+		val response = workOrders.save(wo).toDto()
+		emitAfterCommit { businessMetrics.workOrderCreated() }
+		return response
 	}
 
 	@Transactional(readOnly = true)
@@ -137,14 +157,9 @@ class WorkOrderApplicationService(
 		workOrders.findById(id).map { it.toDto() }.orElseThrow { NotFoundException("Work order not found") }
 
 	@Transactional(readOnly = true)
-	fun track(customerTaxIdDigits: String, trackingCode: String): WorkOrderTrackingResponse {
-		val doc = TaxDocument.parse(customerTaxIdDigits)
-		val wo = workOrders.findByTrackingCode(trackingCode.trim())
-			.orElseThrow { NotFoundException("Work order not found") }
+	fun trackForCustomer(customerId: UUID, trackingCode: String): WorkOrderTrackingResponse {
+		val wo = loadWorkOrderForCustomer(customerId, trackingCode)
 		val customer = customers.findById(wo.customerId).orElseThrow { NotFoundException("Customer not found") }
-		if (customer.fiscalDocument.digits != doc.digits) {
-			throw BusinessRuleException("Document does not match this work order")
-		}
 		if (
 			wo.status == WorkOrderStatus.RECEIVED ||
 			wo.status == WorkOrderStatus.IN_DIAGNOSIS ||
@@ -159,7 +174,7 @@ class WorkOrderApplicationService(
 			statusLabel = wo.status.label,
 			totalCents = wo.totalCents,
 			vehiclePlate = vehicle.licensePlate.normalized,
-			maskedCustomerTaxId = maskTaxId(doc.digits),
+			maskedCustomerTaxId = maskTaxId(customer.fiscalDocument.digits),
 		)
 	}
 
@@ -169,42 +184,50 @@ class WorkOrderApplicationService(
 		else -> "***"
 	}
 
-	private fun loadWorkOrderForCustomer(documentDigits: String, trackingCode: String): WorkOrder {
-		val doc = TaxDocument.parse(documentDigits)
+	private fun loadWorkOrderForCustomer(customerId: UUID, trackingCode: String): WorkOrder {
 		val wo = workOrders.findByTrackingCode(trackingCode.trim())
 			.orElseThrow { NotFoundException("Work order not found") }
-		val customer = customers.findById(wo.customerId).orElseThrow { NotFoundException("Customer not found") }
-		if (customer.fiscalDocument.digits != doc.digits) {
-			throw BusinessRuleException("Document does not match this work order")
+		if (wo.customerId != customerId) {
+			throw NotFoundException("Work order not found")
 		}
 		return wo
 	}
 
 	@Transactional
-	fun approveCustomerQuote(customerTaxIdDigits: String, trackingCode: String): WorkOrderTrackingResponse {
-		val wo = loadWorkOrderForCustomer(customerTaxIdDigits, trackingCode)
+	fun approveCustomerQuoteForCustomer(customerId: UUID, trackingCode: String): WorkOrderTrackingResponse {
+		val wo = loadWorkOrderForCustomer(customerId, trackingCode)
 		// Idempotência: aprovação já aplicada (liberada ao almoxarife ou em execução) não reaplica a transição.
 		if (wo.status == WorkOrderStatus.AWAITING_PARTS_RELEASE || wo.status == WorkOrderStatus.IN_EXECUTION) {
-			return track(customerTaxIdDigits, trackingCode)
+			return trackForCustomer(customerId, trackingCode)
 		}
 		// Swimlane: a aprovação do cliente apenas libera a OS ao almoxarife (AWAITING_PARTS_RELEASE).
 		// A execução só inicia na confirmação de saída das peças (WarehouseApplicationService.confirmStockExitForWorkOrder).
-		wo.approveCustomerQuote(now())
+		val completedAt = now()
+		val startedAt = wo.quoteSentAt
+		wo.approveCustomerQuote(completedAt)
+		requireNotNull(startedAt) { "Quote timestamp is required" }
 		workOrders.save(wo)
-		return track(customerTaxIdDigits, trackingCode)
+		val response = trackForCustomer(customerId, trackingCode)
+		emitAfterCommit { businessMetrics.stageCompleted(WorkOrderStage.APPROVAL, Duration.between(startedAt, completedAt)) }
+		return response
 	}
 
 	@Transactional
-	fun rejectCustomerQuote(customerTaxIdDigits: String, trackingCode: String): WorkOrderTrackingResponse {
-		val wo = loadWorkOrderForCustomer(customerTaxIdDigits, trackingCode)
+	fun rejectCustomerQuoteForCustomer(customerId: UUID, trackingCode: String): WorkOrderTrackingResponse {
+		val wo = loadWorkOrderForCustomer(customerId, trackingCode)
 		// Idempotência: decisão de recusa reenviada não reaplica a transição.
 		if (wo.status == WorkOrderStatus.CANCELLED) {
-			return track(customerTaxIdDigits, trackingCode)
+			return trackForCustomer(customerId, trackingCode)
 		}
 		cancelReservationsIfAny(wo.id)
-		wo.rejectCustomerQuote(now())
+		val completedAt = now()
+		val startedAt = wo.quoteSentAt
+		wo.rejectCustomerQuote(completedAt)
+		requireNotNull(startedAt) { "Quote timestamp is required" }
 		workOrders.save(wo)
-		return track(customerTaxIdDigits, trackingCode)
+		val response = trackForCustomer(customerId, trackingCode)
+		emitAfterCommit { businessMetrics.stageCompleted(WorkOrderStage.APPROVAL, Duration.between(startedAt, completedAt)) }
+		return response
 	}
 
 	@Transactional
@@ -243,9 +266,14 @@ class WorkOrderApplicationService(
 	@Transactional
 	fun submitPlanForInternalApproval(id: UUID): WorkOrderResponse {
 		val wo = workOrders.findById(id).orElseThrow { NotFoundException("Work order not found") }
-		wo.submitPlanForInternalApproval(now())
+		val completedAt = now()
+		val startedAt = wo.diagnosedAt
+		wo.submitPlanForInternalApproval(completedAt)
+		requireNotNull(startedAt) { "Diagnosis timestamp is required" }
 		validateAndReplaceReservations(wo)
-		return workOrders.save(wo).toDto()
+		val response = workOrders.save(wo).toDto()
+		emitAfterCommit { businessMetrics.stageCompleted(WorkOrderStage.DIAGNOSIS, Duration.between(startedAt, completedAt)) }
+		return response
 	}
 
 	/** Administrador: reprova plano interno. */
@@ -302,7 +330,10 @@ class WorkOrderApplicationService(
 				"Existem reservas de peças pendentes de confirmação de saída pelo almoxarife",
 			)
 		}
-		wo.completeServices(now())
+		val completedAt = now()
+		val startedAt = wo.workStartedAt
+		wo.completeServices(completedAt)
+		requireNotNull(startedAt) { "Execution timestamp is required" }
 		val saved = workOrders.save(wo)
 		val customer = customers.findById(saved.customerId).orElseThrow { NotFoundException("Customer not found") }
 		val vehicle = vehicles.findById(saved.vehicleId).orElseThrow { NotFoundException("Vehicle not found") }
@@ -311,7 +342,9 @@ class WorkOrderApplicationService(
 		    customerEmail = customer.email,
 		    vehicleModel = "${vehicle.brand} ${vehicle.model}",
 		)
-		return saved.toDto()
+		val response = saved.toDto()
+		emitAfterCommit { businessMetrics.stageCompleted(WorkOrderStage.EXECUTION, Duration.between(startedAt, completedAt)) }
+		return response
 	}
 
 	@Transactional

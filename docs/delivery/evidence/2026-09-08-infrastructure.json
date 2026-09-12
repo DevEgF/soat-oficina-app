@@ -1,0 +1,48 @@
+{
+  "observedAt": "2026-09-08T23:07:06.3955464Z",
+  "region": "us-east-1",
+  "database": {
+    "name": "soat-oficina-db",
+    "status": "available",
+    "engine": "postgres",
+    "version": "16.13",
+    "class": "db.t4g.micro",
+    "public": false,
+    "encrypted": true,
+    "deletionProtection": true,
+    "multiAZ": false,
+    "storageGiB": 20,
+    "storageType": "gp3",
+    "backupDays": 1,
+    "monitoringInterval": 60,
+    "logExports": [
+      "postgresql"
+    ],
+    "managedCredentialStatus": "active"
+  },
+  "alarms": [
+    {
+      "name": "soat-oficina-db-high-connections",
+      "state": "OK",
+      "metric": "DatabaseConnections",
+      "actionsEnabled": true
+    },
+    {
+      "name": "soat-oficina-db-high-cpu",
+      "state": "OK",
+      "metric": "CPUUtilization",
+      "actionsEnabled": true
+    },
+    {
+      "name": "soat-oficina-db-low-storage",
+      "state": "OK",
+      "metric": "FreeStorageSpace",
+      "actionsEnabled": true
+    }
+  ],
+  "foundationDeploy": "https://github.com/DevEgF/soat-oficina-infra-k8s/actions/runs/34288377074",
+  "databaseDeploy": "https://github.com/DevEgF/soat-oficina-infra-db/actions/runs/34287002625",
+  "foundationDeployResult": "success",
+  "databaseDeployResult": "success",
+  "applicationConnectionTested": false
+}

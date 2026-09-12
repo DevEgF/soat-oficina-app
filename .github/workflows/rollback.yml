@@ -1,0 +1,54 @@
+name: rollback-app
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [hml, prod]
+        required: true
+      revision:
+        description: Retained Helm revision
+        type: string
+        required: true
+permissions:
+  contents: read
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: app-${{ inputs.environment }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      APP_ENVIRONMENT: ${{ inputs.environment }}
+      REVISION: ${{ inputs.revision }}
+      API_BASE_URL: ${{ vars.API_BASE_URL }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Validate rollback scope before AWS access
+        shell: pwsh
+        run: |
+          if ($env:REVISION -notmatch '^[1-9][0-9]*$') { throw 'Revision must be a positive integer' }
+          $branch = if ($env:APP_ENVIRONMENT -eq 'prod') { 'main' } else { 'develop' }
+          if ($env:GITHUB_REF_NAME -ne $branch) { throw 'Branch does not match environment' }
+      - uses: azure/setup-helm@v4.3.1
+        with:
+          version: v4.1.4
+      - run: python3 -m pip install PyYAML==6.0.3
+      - uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - env:
+          EKS_CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+        run: aws eks update-kubeconfig --name "$EKS_CLUSTER_NAME"
+      - shell: pwsh
+        run: |
+          helm rollback "oficina-$env:APP_ENVIRONMENT" $env:REVISION --namespace $env:APP_ENVIRONMENT --wait --timeout 10m
+          if ($LASTEXITCODE -ne 0) { throw 'Helm rollback failed' }
+          ./scripts/smoke-test.ps1 -ApiUrl $env:API_BASE_URL
+          python scripts/cleanup-hooks.py $env:APP_ENVIRONMENT "oficina-$env:APP_ENVIRONMENT"
+          if ($LASTEXITCODE -ne 0) { throw 'Rollback succeeded but obsolete hook cleanup failed' }

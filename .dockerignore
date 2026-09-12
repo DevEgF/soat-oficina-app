@@ -1,4 +1,14 @@
 oficina/build
 oficina/.gradle
+.gradle-user-home
+.tmp-jdk17
+.tmp-jdk17.zip
 .git
 .idea
+.superpowers
+.tmp
+frontend/node_modules
+frontend/dist
+**/.env.local
+**/*.tfstate
+**/*.tfplan

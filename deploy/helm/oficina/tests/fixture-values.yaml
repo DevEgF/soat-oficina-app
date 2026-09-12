@@ -1,0 +1,11 @@
+# Synthetic metadata for render validation only. Contains no credentials.
+image:
+  repository: example.invalid/oficina
+  digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+db:
+  endpoint: database.example.invalid
+  secretArn: arn:aws:secretsmanager:us-east-1:123456789012:secret:database-test
+jwt:
+  secretArn: arn:aws:secretsmanager:us-east-1:123456789012:secret:jwt-test
+staff:
+  secretArn: arn:aws:secretsmanager:us-east-1:123456789012:secret:staff-test
