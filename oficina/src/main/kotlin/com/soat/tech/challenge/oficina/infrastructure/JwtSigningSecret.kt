@@ -1,14 +1,15 @@
 package com.soat.tech.challenge.oficina.infrastructure
 
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.core.env.Environment
 import org.springframework.stereotype.Component
 
 @Component
 class JwtSigningSecret(
-    @Value("\${app.jwt.secret}") val rawValue: String,
     springEnvironment: Environment,
 ) {
+    // Read configuration directly so secret bytes are never parsed as SpEL.
+    val rawValue: String = springEnvironment.getRequiredProperty("app.jwt.secret")
+
     init {
         require(rawValue.isNotBlank()) { "app.jwt.secret must not be blank" }
         require(!rawValue.isUnresolvedPlaceholder()) { "app.jwt.secret must be configured" }
