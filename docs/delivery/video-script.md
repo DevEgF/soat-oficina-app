@@ -1,28 +1,33 @@
-# Roteiro do vídeo da Fase 3
+# Índice da gravação da Fase 3
 
-Duração prevista: 12 minutos. Versão local de 11/09/2026, sem implantação AWS.
-Apresentar somente código e evidências existentes. Dizer no início que a
-arquitetura AWS está implementada, mas a nuvem não será ativada nesta demonstração.
-Não abrir arquivos de ambiente, estados Terraform ou dados de clientes reais.
+O roteiro local anterior foi substituído por uma demonstração com APIs e evidências reais da AWS. A gravação foi feita no OBS em 11/09/2026 (Brasília), após validação de homologação e produção.
 
-| Tempo | Conteúdo e material |
-|---|---|
-| 00:00-00:45 | Explicar o desafio da oficina e mostrar os quatro repositórios listados no checklist. Informar o escopo local da demonstração. |
-| 00:45-02:00 | Mostrar docs/architecture/componentes.md e o isolamento por namespace, schema, API e claim de ambiente. |
-| 02:00-03:15 | Explicar o código Terraform EKS/RDS, rede privada e controles de custo. Mostrar resultados locais registrados, sem executar apply ou abrir console como prova de recursos ativos. |
-| 03:15-05:15 | Mostrar o diagrama de autenticação e testes de CPF inválido, ACTIVE, BLOCKED e inexistente; explicar validade do JWT e rejeição de ambiente incorreto. Não exibir tokens. |
-| 05:15-07:30 | Mostrar o diagrama da OS e testes de consulta, aprovação, rejeição e acesso de outro cliente. Uma demonstração executável exige ambiente local previamente preparado com dados sintéticos; a Lambda não está embutida no Spring. |
-| 07:30-09:00 | Mostrar workflows e checks registrados nos PRs, promoção do mesmo digest e seis cenários de recuperação. Diferenciar rollback kind já registrado de rollback AWS ainda não validado. Não acionar workflows. |
-| 09:00-10:30 | Mostrar instrumentação JSON/EMF, correlação e teste de transporte Fluent Bit. Explicar que dashboards e trace ponta a ponta em CloudWatch não foram capturados nesta etapa. |
-| 10:30-11:30 | Mostrar coleção Postman, definições OpenAPI e resultados de testes em docs/acceptance.md, identificando a data das evidências. |
-| 11:30-12:00 | Mostrar checklist, links públicos e limitações do aceite. Registrar que AWS permaneceu fora da execução e que não há endpoint ativo comprovado. |
+- Duração: 8min14s, dentro do limite de 15 minutos.
+- Formato: MP4, 1920 × 1080, sem faixa de áudio, conforme solicitado pelo responsável.
+- Decodificação integral validada e quadros revisados visualmente.
+- SHA256: `c857194957c37465af6ee210f42f592d1ebc5aab37b597a553e88d3cf437b12a`.
+- O arquivo está preservado pelo responsável. Link YouTube/Vimeo ainda não registrado; este documento não substitui o upload exigido pelo enunciado.
 
-## Preparação e revisão
+| Início aproximado | Conteúdo |
+| --- | --- |
+| 00:00 | Abertura |
+| 00:18 | Arquitetura |
+| 00:40 | Resumo da entrega e digest |
+| 01:02 | Postman em homologação |
+| 02:34 | Postman em produção |
+| 04:07 | Jornada da OS em produção |
+| 05:48 | Gráfico de tráfego |
+| 06:08 | Gráfico de OS criadas |
+| 06:28 | Gráfico de duração das etapas |
+| 06:48 | Resumo de traces |
+| 07:10 | Logs correlacionados |
+| 07:32 | Evidência de rollback |
+| 07:54 | Encerramento da demonstração |
 
-1. Preparar telas de código, diagramas e relatórios locais antes de gravar.
-2. Usar 1080p, zoom legível e dados sintéticos; fechar abas com dados pessoais.
-3. Não executar scripts de bootstrap, deploy, promoção, remoção ou captura AWS.
-4. Gravar a narração distinguindo implementação, testes locais e validação em nuvem.
-5. Revisar áudio, legibilidade, duração e ausência de dados sensíveis.
-6. Após gravar, registrar o link real e os timestamps no checklist. A gravação
-   final ainda não existe; não apresentar este roteiro como vídeo entregue.
+## Limites da demonstração
+
+As chamadas de API foram executadas durante a gravação com dados sintéticos. Os gráficos CloudWatch e os registros de logs/traces são reais, coletados e apresentados como imagens e resumos. O trecho de entrega exibe resultado/digest, não a execução do GitHub Actions; não foi gravada navegação ao vivo no console de dashboards ou traces.
+
+O vídeo, portanto, não comprova integralmente todos os itens audiovisuais do enunciado. A ausência de narração foi uma preferência do responsável; a necessidade de mostrar pipeline/deploy e análise ao vivo permanece explicitada no [aceite](../acceptance.md).
+
+Após preservar o vídeo, o responsável encerrou a conta AWS para evitar custos recorrentes. Não há ambiente ativo anunciado. Consulte o [registro de execução e encerramento](encerramento-aws.md) para links históricos, verificações e limites da remoção.
