@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import org.slf4j.MDC
 import jakarta.servlet.FilterChain
 import org.springframework.mock.web.MockFilterChain
@@ -30,10 +32,11 @@ class CorrelationIdFilterTest {
         )
     }
 
-    @Test
-    fun `preserves safe incoming correlation id and propagates context`() {
+    @ParameterizedTest
+    @ValueSource(strings = ["req-123", "gateway-request="])
+    fun `preserves safe incoming correlation id and propagates context`(correlationId: String) {
         val request = MockHttpServletRequest().apply {
-            addHeader("X-Correlation-Id", "req-123")
+            addHeader("X-Correlation-Id", correlationId)
             addHeader("Authorization", "Bearer secret-token")
             setContent("sensitive body".toByteArray())
         }
@@ -44,8 +47,8 @@ class CorrelationIdFilterTest {
             contextDuringChain = MDC.getCopyOfContextMap()
         })
 
-        assertEquals("req-123", response.getHeader("X-Correlation-Id"))
-        assertEquals("req-123", contextDuringChain?.get("requestId"))
+        assertEquals(correlationId, response.getHeader("X-Correlation-Id"))
+        assertEquals(correlationId, contextDuringChain?.get("requestId"))
         assertEquals("hml", contextDuringChain?.get("environment"))
         assertEquals("oficina", contextDuringChain?.get("service"))
         assertTrue(contextDuringChain?.values?.none { it.contains("secret-token") || it.contains("sensitive body") } == true)

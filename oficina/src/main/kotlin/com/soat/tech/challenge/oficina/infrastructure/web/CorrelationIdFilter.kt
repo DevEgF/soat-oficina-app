@@ -55,7 +55,7 @@ class CorrelationIdFilter(
         const val REQUEST_ID_KEY = "requestId"
         const val ENVIRONMENT_KEY = "environment"
         const val SERVICE_KEY = "service"
-        val SAFE_CORRELATION_ID = Regex("[A-Za-z0-9._-]{1,64}")
+        val SAFE_CORRELATION_ID = Regex("[A-Za-z0-9._=-]{1,64}")
         val log = LoggerFactory.getLogger(CorrelationIdFilter::class.java)
     }
 }
