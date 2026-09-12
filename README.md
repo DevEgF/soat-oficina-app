@@ -1,5 +1,7 @@
 # Oficina - Fase 3
 
+> **Ambiente AWS encerrado após a demonstração para evitar custos recorrentes.** A implantação e os testes foram executados; os workflows AWS estão desabilitados e o CI permanece ativo. Consulte o [registro de execução, evidências e limites da remoção](docs/delivery/encerramento-aws.md). Não há endpoint AWS ativo anunciado.
+
 Aplicação Kotlin/Spring Boot com PostgreSQL, frontend React e entrega na AWS por quatro repositórios: aplicação, autenticação Lambda, fundação EKS e banco RDS. O código desta fase substitui as rotas públicas de acompanhamento por autenticação de cliente com CPF e JWT vinculado ao UUID do cliente.
 
 ## Execução local
@@ -55,4 +57,4 @@ Os scripts Python de verificação usam PyYAML. Testes de integração usam some
 - [Roteiro e evidências de aceite](docs/acceptance.md).
 - [Checklist consolidado da entrega](docs/delivery/fase-3-checklist.md) e [roteiro do vídeo](docs/delivery/video-script.md).
 
-A configuração de entrega está sendo validada localmente. URLs AWS e evidências de execução em nuvem só são registradas após implantação real; não há endpoint fictício apresentado como ativo.
+A implantação em nuvem foi concluída e validada antes do encerramento do ambiente. Os links históricos de execução e as pendências formais da entrega estão no [registro de encerramento](docs/delivery/encerramento-aws.md).
