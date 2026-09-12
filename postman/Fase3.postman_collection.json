@@ -39,7 +39,7 @@
               "const data = pm.response.json();",
               "pm.test('15 minutes and no-store', () => { pm.expect(data.expiresIn).to.eql(900); pm.expect(pm.response.headers.get('Cache-Control')).to.include('no-store'); });",
               "const claims = JSON.parse(require('buffer').Buffer.from(data.accessToken.split('.')[1], 'base64').toString());",
-              "pm.test('Customer JWT contract', () => { pm.expect(claims.iss).to.eql('oficina'); pm.expect([].concat(claims.aud)).to.include('oficina-api'); pm.expect(claims.env).to.eql(pm.environment.get('environment')); pm.expect(claims.scope).to.eql('CUSTOMER'); pm.expect(claims.sub).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i); pm.expect(claims.exp-claims.iat).to.eql(900); pm.expect(claims).not.to.have.property('cpf'); });",
+              "pm.test('Customer JWT contract', () => { pm.expect(claims.iss).to.eql('oficina'); pm.expect([].concat(claims.aud)).to.include('oficina-api'); pm.expect(claims.env).to.eql(pm.environment.get('environment')); pm.expect(claims.scope).to.eql(['CUSTOMER']); pm.expect(claims.sub).to.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i); pm.expect(claims.exp-claims.iat).to.eql(900); pm.expect(claims).not.to.have.property('cpf'); });",
               "pm.variables.set('customerToken', data.accessToken);"
             ]
           }

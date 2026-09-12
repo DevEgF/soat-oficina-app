@@ -28,6 +28,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders
 import org.springframework.web.context.WebApplicationContext
 import java.security.MessageDigest
 import java.time.Instant
+import java.util.Base64
 import java.util.Date
 import java.util.UUID
 
@@ -96,7 +97,12 @@ class JwtEnvironmentValidationTest {
     @Test
     fun `decoder rejects corrupted signature`() {
         val valid = token()
-        val corrupted = valid.dropLast(1) + if (valid.last() == 'a') "b" else "a"
+        // Alter signature bytes: changing trailing Base64 padding bits can leave
+        // the decoded signature intact and make this test fail intermittently.
+        val signature = Base64.getUrlDecoder().decode(valid.substringAfterLast('.'))
+        signature[0] = (signature[0].toInt() xor 1).toByte()
+        val corrupted = valid.substringBeforeLast('.') + "." +
+            Base64.getUrlEncoder().withoutPadding().encodeToString(signature)
         assertThrows(JwtException::class.java) { decoder.decode(corrupted) }
     }
 

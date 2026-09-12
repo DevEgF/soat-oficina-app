@@ -7,6 +7,7 @@ function helm {
     $global:LASTEXITCODE = 0
     switch ($args[0]) {
         'list' {
+            if ($args -contains '--all') { $global:LASTEXITCODE = 1; return }
             if ($global:deliveryTestScenario -eq 'inspection-fails') { $global:LASTEXITCODE = 1; return }
             if ($global:deliveryTestScenario -in @('smoke-fails-existing','existing-unhealthy')) { '[{"name":"oficina-hml"}]' } else { '[]' }
         }

@@ -34,6 +34,8 @@ jobs:
           $branch = if ($env:APP_ENVIRONMENT -eq 'prod') { 'main' } else { 'develop' }
           if ($env:GITHUB_REF_NAME -ne $branch) { throw 'Branch does not match environment' }
       - uses: azure/setup-helm@v4.3.1
+        with:
+          version: v4.1.4
       - uses: aws-actions/configure-aws-credentials@cbe3b392738ccf3f987d68400dafcf4b0624a56c
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
