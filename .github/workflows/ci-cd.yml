@@ -97,7 +97,11 @@ jobs:
         shell: pwsh
         run: |
           $forward = Start-Process kubectl -ArgumentList '-n','hml','port-forward','service/oficina-hml','18080:8080' -PassThru -RedirectStandardOutput /tmp/forward.log -RedirectStandardError /tmp/forward-error.log
-          try { ./scripts/smoke-test.ps1 -ApiUrl http://localhost:18080 -AllowLocal } finally { Stop-Process -Id $forward.Id -ErrorAction SilentlyContinue }
+          try {
+            ./scripts/smoke-test.ps1 -ApiUrl http://localhost:18080 -AllowLocal
+            node scripts/smoke-local-fixtures.mjs http://localhost:18080
+            if ($LASTEXITCODE -ne 0) { throw 'Synthetic fixture smoke failed' }
+          } finally { Stop-Process -Id $forward.Id -ErrorAction SilentlyContinue }
       - name: Failure diagnostics
         if: failure()
         run: kubectl -n hml get pods,jobs,events
