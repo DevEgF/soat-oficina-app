@@ -1,0 +1,13 @@
+[Unit]
+Description=Collect Oficina business telemetry every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+RandomizedDelaySec=20s
+Persistent=true
+Unit=oficina-business-telemetry.service
+
+[Install]
+WantedBy=timers.target
