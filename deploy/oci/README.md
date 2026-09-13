@@ -21,19 +21,25 @@ alterados, e nenhum workflow ou recurso AWS foi reativado.
   smoke offline, sem operações AWS.
 - Chart: lint, testes de rejeição de namespace/digest/TLS e dry-run do servidor
   K3s passaram. Configurador de segredos: três testes passaram em Windows e Linux.
-- Manifestos New Relic `nri-bundle 8.0.24` renderizados e aceitos em dry-run do K3s;
-  **agentes ainda não instalados e ingestão não comprovada**.
+- New Relic `nri-bundle 8.0.24` instalado, cinco pods Ready sem reinícios.
+  Chave dedicada `oficina-oci` validada na região US (Metric API HTTP 202).
+  Consultas no painel confirmaram K8sNodeSample, Log, Transaction e Span.
+- API e auth implantadas em hml/prod com os mesmos digests. Os dois hooks Flyway
+  concluíram; conexão Neon direta com TLS verify-full e sete migrações por schema.
+- Smoke real: saúde, login staff, leitura no banco, autenticação CPF de cliente
+  sintético em hml, rejeição de acesso administrativo por cliente e rejeição de
+  tokens entre hml/prod nos dois sentidos. Cliente sintético removido após o teste.
+  A jornada completa de OS e autorização entre proprietários ainda não foi repetida.
 
-## Dependências para iniciar a aplicação
+## Segredos configurados
 
-Não existem ainda Secrets oficina-runtime em hml/prod ou newrelic-license na VM.
-Uma chave candidata fornecida pelo responsável foi testada sem eco: Metric API
-retornou 403 em US/EU e NerdGraph retornou 401 em US/EU. Ela não foi aplicada aos
-agentes. A cópia candidata está somente em arquivo root-only fora deste repositório.
+Secrets oficina-runtime existem em hml/prod e newrelic-license nos três namespaces.
+Os valores foram transferidos por SSH, sem entrar no Git ou em saídas de ferramentas.
+Arquivos temporários locais de transporte cifrado foram removidos após a importação.
 O responsável autorizou substituir Secrets Manager por arquivos root-only e
 Kubernetes Secrets para esta implantação. Não enviar valores ao chat/Git.
 
-Em um terminal SSH interativo:
+Para configuração futura, em um terminal SSH interativo:
 
 ```bash
 sudo python3 /opt/oficina/configure-secrets.py --environment hml
@@ -68,7 +74,16 @@ sudo bash deploy.sh hml docker.io/library/oficina-oci \
 Realizar smoke de health, autenticação CPF, proprietário da OS, staff e rejeição
 entre ambientes antes da promoção. O script bloqueia produção quando o digest da
 aplicação diverge daquele em hml. A imagem auth do release também deve ser preservada.
-Use `prod` no mesmo comando somente após o smoke. Isso ainda não foi executado.
+Use `prod` no mesmo comando somente após o smoke. A primeira promoção privada foi
+executada em 12/09/2026; os dois ambientes passaram em `smoke-vm.py`.
+
+```bash
+sudo python3 /opt/oficina/oci/smoke-vm.py hml
+sudo python3 /opt/oficina/oci/smoke-vm.py prod
+```
+
+O smoke usa port-forward somente em loopback, credenciais root-only e remove o
+cliente sintético de hml. Produção faz leitura/login e valida rejeição JWT cruzada.
 
 Sem domínio/TLS, manter ingress desabilitado e usar port-forward por SSH para
 validação privada. O Traefik respondeu 404 localmente; a tentativa HTTP externa
@@ -81,18 +96,25 @@ certificado antes de habilitar ingress. Não abrir 6443/10250 para a internet.
 sudo bash /opt/oficina/oci/install-newrelic.sh
 ```
 
-Depois habilitar `observability.newRelic.enabled=true` e definir a região US/EU
-nos valores do deploy. A imagem já inclui Java agent 9.4.0 com checksum verificado;
+O release-values.yaml habilita `observability.newRelic.enabled=true` na região US.
+A imagem já inclui Java agent 9.4.0 com checksum verificado;
 ele só é ativado quando essa opção está ligada. O chart usa Secret existente.
 Fluent Bit coleta logs apenas de hml/prod; encaminhamento duplicado pelo Java é
 desativado. Pixie/eBPF e scraper do control plane ficam desativados neste perfil.
 Validar métricas de CPU/memória, transações, logs e traces recebidos no New Relic.
+No Oracle Linux, Fluent Bit usa contexto SELinux `spc_t` apenas no coletor para
+ler logs do host, com capabilities removidas e privilege escalation desabilitado.
+SELinux do host permanece Enforcing. Offsets ficam em `/var/lib/oficina-fluentbit`,
+rotulado container_file_t pelo instalador; após relabel do host, reaplicar o script.
+Hibernate recebe `hibernate.default_schema` via SPRING_APPLICATION_JSON para
+preservar o underscore do nome da propriedade e separar hml/prod corretamente.
 As métricas de negócio EMF existentes não viram automaticamente métricas New Relic;
 dashboards/alertas de negócio ainda precisam de adaptação e comprovação.
 
 ## Limites do que está pronto
 
-- Nenhuma migração/conexão Neon real, jornada de OS ou ingestão New Relic foi validada.
+- A jornada completa de OS, autorização entre proprietários e rollback OCI ainda
+  precisam de validação; conexão Neon, migrações e ingestão New Relic foram comprovadas.
 - O adaptador HTTP de auth usa o domínio/JWT existentes, mas **não é serverless**.
   A implementação Lambda e suas evidências AWS permanecem a referência desse critério.
 - K3s de nó único não oferece alta disponibilidade entre nós.

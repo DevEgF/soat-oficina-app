@@ -30,6 +30,7 @@ class ChartContractTests(unittest.TestCase):
             self.assertIn('name: oficina-runtime', result.stdout)
             self.assertNotIn('kind: Secret\n', result.stdout)
             self.assertNotIn('secrets-store.csi.k8s.io', result.stdout)
+            self.assertIn('spring.jpa.properties.hibernate.default_schema', result.stdout)
 
     def test_external_ingress_requires_tls_and_routes_auth_separately(self):
         failed = render('hml', 'hml', DIGEST, '--set', 'ingress.enabled=true')

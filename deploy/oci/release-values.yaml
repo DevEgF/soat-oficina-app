@@ -8,3 +8,7 @@ auth:
   image:
     repository: docker.io/library/oficina-auth-oci
     digest: sha256:c60c50aafe014344b9813097bd8cf11d85bf2a23c5d97c283fa4b1684b6e6e24
+observability:
+  newRelic:
+    enabled: true
+    region: US

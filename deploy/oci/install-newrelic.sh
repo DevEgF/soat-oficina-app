@@ -7,6 +7,11 @@ region=$(cat /etc/oficina/newrelic-region)
 [[ $region == US || $region == EU ]] || exit 2
 kubectl get node oficina-oci -o name >/dev/null
 kubectl -n newrelic get secret newrelic-license -o name >/dev/null
+# Keep offsets persistent without granting containers write access to var_log_t.
+install -d -m 0700 /var/lib/oficina-fluentbit
+if command -v selinuxenabled >/dev/null && selinuxenabled; then
+  chcon -R -t container_file_t /var/lib/oficina-fluentbit
+fi
 helm repo add newrelic https://helm-charts.newrelic.com
 flags=()
 if [[ $region == EU ]]; then

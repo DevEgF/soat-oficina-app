@@ -22,6 +22,8 @@ seccompProfile:
   value: docker
 - name: SPRING_JPA_SHOW_SQL
   value: "false"
+- name: SPRING_APPLICATION_JSON
+  value: {{ dict "spring.jpa.properties.hibernate.default_schema" .Values.environment | toJson | quote }}
 - name: SPRING_FLYWAY_SCHEMAS
   value: {{ .Values.environment | quote }}
 - name: SPRING_FLYWAY_DEFAULT_SCHEMA
