@@ -1,5 +1,11 @@
 # Infraestrutura (Terraform) — Cluster local kind
 
+## Contexto atual
+
+Este diretório continua sendo o laboratório Terraform/kind da Fase 2, com PostgreSQL dentro do cluster. A implantação atual usa K3s na Oracle e banco externo Neon; não aplique este Terraform para alterar a VM OCI.
+
+O [README principal](../README.md) reúne RFCs, justificativa AWS → Oracle, escolha PostgreSQL/Neon, arquitetura, dashboards, alertas e situação do vídeo.
+
 Provisiona um cluster **Kubernetes local com [kind](https://kind.sigs.k8s.io/)**
 para rodar a aplicação Oficina + PostgreSQL com autoescala (HPA).
 

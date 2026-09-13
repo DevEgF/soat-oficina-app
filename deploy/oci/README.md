@@ -1,6 +1,6 @@
 # Continuação OCI, K3s, Neon e New Relic
 
-Implementação adicional em `feature/oci-k3s`. Os arquivos AWS existentes não foram
+Implementação adicional integrada em `develop`. Os arquivos AWS existentes não foram
 alterados, e nenhum workflow ou recurso AWS foi reativado.
 
 ## Estado verificado em 12/09/2026
@@ -29,7 +29,7 @@ alterados, e nenhum workflow ou recurso AWS foi reativado.
 - Smoke real: saúde, login staff, leitura no banco, autenticação CPF de cliente
   sintético em hml, rejeição de acesso administrativo por cliente e rejeição de
   tokens entre hml/prod nos dois sentidos. Cliente sintético removido após o teste.
-  A jornada completa de OS e autorização entre proprietários ainda não foi repetida.
+  Posteriormente, a jornada completa até DELIVERED e a autorização entre proprietários foram verificadas em hml; a OS sintética desse ensaio foi preservada.
 
 ## Segredos configurados
 
@@ -85,10 +85,14 @@ sudo python3 /opt/oficina/oci/smoke-vm.py prod
 O smoke usa port-forward somente em loopback, credenciais root-only e remove o
 cliente sintético de hml. Produção faz leitura/login e valida rejeição JWT cruzada.
 
-Sem domínio/TLS, manter ingress desabilitado e usar port-forward por SSH para
-validação privada. O Traefik respondeu 404 localmente; a tentativa HTTP externa
-ao IP da VM não conectou. Verificar regras OCI para 80/443 e configurar domínio e
-certificado antes de habilitar ingress. Não abrir 6443/10250 para a internet.
+## HTTPS público
+
+HTTPS foi instalado com `install-https.sh`, cert-manager v1.20.3, ClusterIssuer `letsencrypt-production` e desafio HTTP-01 no Traefik. Os dois namespaces possuem Certificate e Secret `oficina-tls`, com renovação automática pelo cert-manager. HTTP redireciona para HTTPS preservando a rota do desafio ACME.
+
+- HML: https://hml.129.213.121.122.sslip.io
+- PROD: https://oficina.129.213.121.122.sslip.io
+
+As regras OCI e o firewalld permitem 80/443; SSH já estava disponível. API-server 6443 e kubelet 10250 não precisam de exposição pública. O certificado foi verificado por clientes HTTPS sem desabilitar validação TLS. Mudança do IP exige atualizar hosts e certificados. A renovação depende de DNS, alcance HTTP e disponibilidade do nó.
 
 ## Observabilidade
 
@@ -108,21 +112,44 @@ SELinux do host permanece Enforcing. Offsets ficam em `/var/lib/oficina-fluentbi
 rotulado container_file_t pelo instalador; após relabel do host, reaplicar o script.
 Hibernate recebe `hibernate.default_schema` via SPRING_APPLICATION_JSON para
 preservar o underscore do nome da propriedade e separar hml/prod corretamente.
-As métricas de negócio EMF existentes não viram automaticamente métricas New Relic;
-dashboards/alertas de negócio ainda precisam de adaptação e comprovação.
+O coletor `business-telemetry.py`, instalado por `install-business-telemetry.sh`, consulta agregados PostgreSQL a cada cinco minutos via systemd. Usa cliente PostgreSQL 16, TLS verify-full, schema validado e consultas somente leitura com timeout. O cliente 13 originalmente disponível não atendia à conexão Neon deste ambiente.
 
-## Limites do que está pronto
+| Evento | Uso correto |
+|---|---|
+| `OficinaBusinessDaily` | Criadas, finalizadas e entregues por dia; sete dias no fuso America/Sao_Paulo, incluindo zeros; usar latest() por dia para não somar snapshots repetidos |
+| `OficinaBusinessStageSnapshot` | DIAGNOSIS, APPROVAL, EXECUTION e FINALIZATION; sampleCount, totalDurationMs e média somente quando há amostras |
+| `OficinaTelemetryHeartbeat` | Saúde do coletor; não substitui falhas de processamento de OS |
 
-- A jornada completa de OS, autorização entre proprietários e rollback OCI ainda
-  precisam de validação; conexão Neon, migrações e ingestão New Relic foram comprovadas.
-- O adaptador HTTP de auth usa o domínio/JWT existentes, mas **não é serverless**.
-  A implementação Lambda e suas evidências AWS permanecem a referência desse critério.
-- K3s de nó único não oferece alta disponibilidade entre nós.
-- O frontend não foi empacotado neste chart; o escopo atual é API e autenticação.
-- CI/CD automático OCI, publicação em registry, smoke/rollback integrado e HTTPS
-  público ainda não estão concluídos. O deploy atual é script protegido via SSH.
-- A métrica de Finalização, painel diário e complementação do vídeo do aceite
-  continuam pendentes; instalar New Relic não resolve automaticamente essas lacunas.
+As durações representam criação até diagnóstico, envio do orçamento até aprovação, início da execução até finalização e finalização até entrega. O coletor envia agregados sem CPF, nome, token ou corpo de requisição. `WorkOrderProcessingFailures` continua sendo observado nos logs técnicos; não é inferido do heartbeat.
+
+`generate-dashboards.py` mantém templates portáveis em `dashboards/`. Eles não são exports exatos dos dashboards ajustados na interface; observar unidades, pois templates usam ms e painéis ao vivo podem usar minutos. Em produção sem amostras, a média fica sem dado em vez de informar duração zero. Links dos painéis e alertas estão no [README principal](../../README.md).
+
+O ensaio de alerta contou logs de auth hml, agrupados por statusCode, com limite acima de cinco eventos em um minuto, janela de um minuto e event timer de um minuto. Quarenta respostas 400 e quarenta 401 geraram dois incidentes. Não foram induzidos erros 5xx ou escritas de negócio para esse ensaio; não foi configurada entrega por e-mail/Slack.
+
+## Aceite realizado e limites operacionais
+
+| Item | Resultado registrado |
+|---|---|
+| Neon/Flyway | Sete migrations por schema hml/prod, TLS verificado |
+| Negócio HML | Jornada completa até entregue; segundo cliente recebe 404 ao consultar/decidir OS alheia; cliente recebe 403 em rota administrativa |
+| Autenticação | CPF inválido 400; inexistente 401; JWT de outro ambiente rejeitado 401 |
+| Produção | Saúde, login, leitura e isolamento JWT; sem escrita de OS sintética |
+| Rollback | Mudança de CPU request e restauração Helm preservando OS e digests; não foi rollback de binário |
+| Observabilidade | Logs, transações, spans, métricas Kubernetes, etapas e contagens de negócio nos dashboards |
+| HTTPS | Dois hosts públicos, certificados válidos e redirecionamento HTTP |
+| Vídeo | Gravado com todos os requisitos, conforme confirmação do responsável; link não informado |
+
+K3s possui um único nó e não oferece alta disponibilidade entre nós. Auth HTTP é container, não função serverless; a implementação Lambda permanece preservada. O frontend não está empacotado no chart OCI. Imagens estão importadas no containerd: registry remoto e CI/CD automático OCI continuam sem execução completa. Schemas compartilham usuário proprietário; isolamento forte requer papéis/grants próprios. Helm não desfaz migrações: usar mudanças aditivas e planejar backup/restauração separadamente.
+
+O smoke de negócio cria dados sintéticos em hml e preserva a OS final para verificação. Executar apenas quando essa escrita for desejada:
+
+```bash
+sudo python3 /opt/oficina/oci/business-smoke-vm.py hml
+sudo python3 /opt/oficina/oci/business-smoke-vm.py hml --verify-order <UUID_DA_OS_SINTETICA>
+sudo bash /opt/oficina/oci/verify-rollback.sh <UUID_DA_OS_SINTETICA>
+```
+
+O último comando altera temporariamente a configuração de hml e restaura a revisão anterior. Não usá-lo como consulta de saúde. [Decisões de nuvem, banco, custos e RFCs](../../README.md).
 
 ## Verificações reproduzíveis
 

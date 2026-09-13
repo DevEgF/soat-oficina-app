@@ -1,5 +1,11 @@
 # Manifestos Kubernetes — Oficina
 
+## Contexto atual
+
+Estes manifestos são o laboratório local com PostgreSQL em pod. A implantação OCI usa o chart separado em deploy/oci/chart e banco Neon; estes manifests não representam os recursos ativos de hml/prod.
+
+O [README principal](../README.md) reúne RFCs, justificativa AWS → Oracle, escolha PostgreSQL/Neon, arquitetura, dashboards, alertas e situação do vídeo.
+
 Deploy do monólito (Spring Boot) + PostgreSQL com autoescala horizontal (HPA).
 Pensado para cluster **local** (kind/minikube), mas portável para cloud.
 
