@@ -1,5 +1,11 @@
 # Application chart
 
+## Contexto atual
+
+Este é o chart AWS preservado, com CSI/Pod Identity e RDS. O chart OCI fica em deploy/oci/chart e usa Secrets existentes com Neon. Workflows AWS estão desabilitados; estes procedimentos não reativam a conta encerrada.
+
+O [README principal](../../../README.md) reúne RFCs, justificativa AWS → Oracle, escolha PostgreSQL/Neon, arquitetura, dashboards, alertas e situação do vídeo.
+
 AWS prerequisites: foundation bootstrap must create the `hml`/`prod` namespaces, stable `oficina-app` service accounts, and scoped SecretProviderClass deployment RBAC before the first Helm install. The chart intentionally does not own these shared prerequisites. EKS Pod Identity uses namespace + service-account name. Configure metadata values `image.repository`, immutable `image.digest`, `db.endpoint`, `db.secretArn`, `jwt.secretArn`, and `staff.secretArn`; never put credential values in Helm values.
 
 The ConfigMap (-30) and SecretProviderClass (-20) are retained revision-qualified pre-install/pre-upgrade hooks. The migration Job (-10) uses those exact resources and exits after Flyway/context startup. Runtime pods use the same revision resources and disable Flyway. No migration runs on rollback. The ConfigMap and CSI aliases are shared by both paths. AWS uses verify-full TLS with the image's RDS CA bundle; local kind disables CSI/ADOT and uses a synthetic database and explicit local profile.
