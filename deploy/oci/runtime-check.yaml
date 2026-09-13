@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: oficina-arm64-runtime-check
+  namespace: hml
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: java
+          image: docker.io/library/oficina-oci@sha256:a04bdeeb8d553091d6d84b87b29b110e2066afe86ffe6adda3afe7d98d7fff5e
+          imagePullPolicy: Never
+          command: [java, -version]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            limits:
+              cpu: 200m
+              memory: 128Mi
+        - name: node
+          image: docker.io/library/oficina-auth-oci@sha256:c60c50aafe014344b9813097bd8cf11d85bf2a23c5d97c283fa4b1684b6e6e24
+          imagePullPolicy: Never
+          command: [node, --version]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            limits:
+              cpu: 200m
+              memory: 128Mi

@@ -1,0 +1,4 @@
+__pycache__/
+*.tar
+*.kubeconfig
+*.local.yaml

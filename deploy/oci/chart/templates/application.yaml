@@ -1,0 +1,113 @@
+{{- include "oci.validate" . }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: 3
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: application
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: application
+        app.kubernetes.io/name: oficina
+        oficina.environment: {{ .Values.environment }}
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      securityContext:
+        {{- include "oci.security" . | nindent 8 }}
+      containers:
+        - name: application
+          image: {{ include "oci.image" . | quote }}
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: {{ .Values.existingSecret }}
+          env:
+            {{- include "oci.env" . | nindent 12 }}
+            - name: SPRING_FLYWAY_ENABLED
+              value: "false"
+            {{- if .Values.observability.newRelic.enabled }}
+            {{- if not (has .Values.observability.newRelic.region (list "US" "EU")) }}{{ fail "New Relic region must be US or EU" }}{{ end }}
+            - name: JAVA_TOOL_OPTIONS
+              value: "-javaagent:/app/newrelic.jar"
+            - name: NEW_RELIC_LICENSE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.observability.newRelic.existingSecret }}
+                  key: licenseKey
+            - name: NEW_RELIC_APP_NAME
+              value: {{ printf "oficina-%s" .Values.environment | quote }}
+            - name: NEW_RELIC_HOST
+              value: {{ ternary "collector.eu.newrelic.com" "collector.newrelic.com" (eq .Values.observability.newRelic.region "EU") | quote }}
+            - name: NEW_RELIC_LOG_FILE_NAME
+              value: STDOUT
+            - name: NEW_RELIC_DISTRIBUTED_TRACING_ENABLED
+              value: "true"
+            - name: NEW_RELIC_APPLICATION_LOGGING_FORWARDING_ENABLED
+              value: "false"
+            - name: NEW_RELIC_APPLICATION_LOGGING_LOCAL_DECORATING_ENABLED
+              value: "true"
+            - name: NEW_RELIC_ATTRIBUTES_EXCLUDE
+              value: "request.parameters.*,request.headers.*,response.headers.*,cpf,authorization,password"
+            - name: NEW_RELIC_TRANSACTION_TRACER_RECORD_SQL
+              value: "off"
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 90
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: application
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
