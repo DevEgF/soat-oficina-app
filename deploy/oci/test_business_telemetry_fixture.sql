@@ -1,4 +1,3 @@
-DROP SCHEMA IF EXISTS hml CASCADE;
 CREATE SCHEMA hml;
 CREATE TABLE hml.ordens_servico (
   criado_em timestamp NOT NULL,

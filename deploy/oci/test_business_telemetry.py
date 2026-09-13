@@ -2,6 +2,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import unittest
 from unittest import mock
@@ -14,6 +15,16 @@ SPEC.loader.exec_module(telemetry)
 
 
 class BusinessTelemetryTest(unittest.TestCase):
+    def test_installer_requires_postgresql_16_client_profile(self):
+        installer = Path(__file__).with_name("install-business-telemetry.sh").read_text()
+        self.assertIn("dnf module install -y postgresql:16/client", installer)
+        self.assertIn("psql \\(PostgreSQL\\) 16\\.", installer)
+
+    def test_postgres_fixture_is_fail_closed(self):
+        fixture = Path(__file__).with_name("test_business_telemetry_fixture.sql").read_text()
+        self.assertTrue(fixture.lstrip().startswith("CREATE SCHEMA hml;"))
+        self.assertNotIn("DROP SCHEMA", fixture.upper())
+
     def test_events_include_empty_days_and_all_duration_stages(self):
         rows = [
             {"kind": "daily", "businessDate": "2026-09-06", "createdCount": 0,
@@ -78,6 +89,15 @@ class BusinessTelemetryTest(unittest.TestCase):
                          "set OFICINA_TELEMETRY_TEST_CONTAINER for PostgreSQL integration")
     def test_aggregate_sql_executes_against_timestamp_edge_cases(self):
         container = os.environ["OFICINA_TELEMETRY_TEST_CONTAINER"]
+        if not re.fullmatch(r"oficina-telemetry-test-[0-9a-f]{12}", container):
+            self.fail("integration tests require a uniquely named disposable container")
+        label = subprocess.run(
+            ["docker", "inspect", "--format",
+             '{{index .Config.Labels "oficina.telemetry-fixture"}}', container],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+        )
+        if label.returncode or label.stdout.strip() != b"true":
+            self.fail("integration tests require a dedicated telemetry-fixture container")
         fixture = Path(__file__).with_name("test_business_telemetry_fixture.sql").read_bytes()
         setup = subprocess.run(
             ["docker", "exec", "-i", container, "psql", "-U", "postgres", "-d", "postgres",
