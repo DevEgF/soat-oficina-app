@@ -81,7 +81,9 @@ def read_json(path):
     return value
 
 
-def query_aggregates(config):
+def query_aggregates(config, environment):
+    if environment not in ENVIRONMENTS:
+        raise ValueError("Environment must be hml or prod.")
     required = ("host", "port", "database", "user", "password")
     if any(key not in config for key in required):
         raise ValueError("Invalid database configuration.")
@@ -91,7 +93,8 @@ def query_aggregates(config):
         "PGDATABASE": str(config["database"]), "PGUSER": str(config["user"]),
         "PGPASSWORD": str(config["password"]), "PGSSLMODE": "verify-full",
         "PGSSLROOTCERT": "/etc/pki/tls/certs/ca-bundle.crt",
-        "PGOPTIONS": "-c default_transaction_read_only=on -c statement_timeout=15000",
+        "PGOPTIONS": ("-c default_transaction_read_only=on -c statement_timeout=15000 "
+                      f"-c search_path={environment}"),
     })
     result = subprocess.run(
         ["psql", "--no-psqlrc", "--quiet", "--tuples-only", "--no-align",
@@ -155,7 +158,7 @@ def collect_and_send():
     collected_at = int(time.time())
     for environment in ENVIRONMENTS:
         config = read_json(CONFIG_ROOT / environment / "AUTH_DB_CONFIG")
-        events = build_events(environment, query_aggregates(config), collected_at)
+        events = build_events(environment, query_aggregates(config, environment), collected_at)
         send_events(license_key, events)
         send_events(license_key, [{
             "eventType": "OficinaTelemetryHeartbeat", "environment": environment,

@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
 import subprocess
 import unittest
@@ -43,17 +44,8 @@ class BusinessTelemetryTest(unittest.TestCase):
         self.assertTrue(all(event["environment"] == "hml" for event in events))
         self.assertTrue(all(event["snapshotVersion"] == 1 for event in events))
 
-    def test_sql_defines_pairs_and_excludes_invalid_durations(self):
-        sql = telemetry.AGGREGATE_SQL
-        self.assertIn("diagnosticado_em >= criado_em", sql)
-        self.assertIn("aprovado_em >= orcamento_enviado_em", sql)
-        self.assertIn("finalizada_em >= execucao_iniciada_em", sql)
-        self.assertIn("entregue_em >= finalizada_em", sql)
-        self.assertIn("generate_series(0, 6)", sql)
-        self.assertNotIn("SELECT ID", sql.upper())
-
     @mock.patch.object(telemetry.subprocess, "run")
-    def test_psql_uses_environment_for_secret_and_read_only_limits(self, run):
+    def test_psql_uses_allowlisted_schema_and_protected_connection(self, run):
         rows = [
             {"kind": "daily", "businessDate": f"2026-09-{day:02d}", "createdCount": 0,
              "finalizedCount": 0, "deliveredCount": 0}
@@ -67,14 +59,53 @@ class BusinessTelemetryTest(unittest.TestCase):
         config = {"host": "db.neon.tech", "port": 5432, "database": "db",
                   "user": "user", "password": "secret"}
 
-        telemetry.query_aggregates(config)
+        telemetry.query_aggregates(config, "hml")
 
         kwargs = run.call_args.kwargs
         self.assertNotIn("secret", " ".join(run.call_args.args[0]))
         self.assertEqual("secret", kwargs["env"]["PGPASSWORD"])
         self.assertEqual("verify-full", kwargs["env"]["PGSSLMODE"])
         self.assertIn("default_transaction_read_only=on", kwargs["env"]["PGOPTIONS"])
+        self.assertIn("search_path=hml", kwargs["env"]["PGOPTIONS"])
         self.assertEqual(20, kwargs["timeout"])
+
+        telemetry.query_aggregates(config, "prod")
+        self.assertIn("search_path=prod", run.call_args.kwargs["env"]["PGOPTIONS"])
+        with self.assertRaisesRegex(ValueError, "hml or prod"):
+            telemetry.query_aggregates(config, "public")
+
+    @unittest.skipUnless(os.environ.get("OFICINA_TELEMETRY_TEST_CONTAINER"),
+                         "set OFICINA_TELEMETRY_TEST_CONTAINER for PostgreSQL integration")
+    def test_aggregate_sql_executes_against_timestamp_edge_cases(self):
+        container = os.environ["OFICINA_TELEMETRY_TEST_CONTAINER"]
+        fixture = Path(__file__).with_name("test_business_telemetry_fixture.sql").read_bytes()
+        setup = subprocess.run(
+            ["docker", "exec", "-i", container, "psql", "-U", "postgres", "-d", "postgres",
+             "-v", "ON_ERROR_STOP=1"], input=fixture, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, check=False,
+        )
+        self.assertEqual(0, setup.returncode, setup.stderr.decode(errors="replace"))
+        query = ("SET search_path TO hml;\n" + telemetry.AGGREGATE_SQL).encode()
+        result = subprocess.run(
+            ["docker", "exec", "-i", container, "psql", "-U", "postgres", "-d", "postgres",
+             "--no-psqlrc", "--quiet", "--tuples-only", "--no-align",
+             "-v", "ON_ERROR_STOP=1"], input=query, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, check=False,
+        )
+        self.assertEqual(0, result.returncode, result.stderr.decode(errors="replace"))
+        rows = [json.loads(line) for line in result.stdout.decode().splitlines()
+                if line.startswith("{")]
+        daily = [row for row in rows if row["kind"] == "daily"]
+        stages = {row["stage"]: row for row in rows if row["kind"] == "stage"}
+        self.assertEqual(7, len(daily))
+        self.assertEqual(6, sum(row["createdCount"] == 0 for row in daily))
+        today = next(row for row in daily if row["createdCount"] > 0)
+        self.assertEqual((3, 2, 2), (today["createdCount"], today["finalizedCount"],
+                                    today["deliveredCount"]))
+        self.assertEqual(set(telemetry.STAGES), set(stages))
+        for stage in stages.values():
+            self.assertEqual(1, stage["sampleCount"])
+            self.assertEqual(60000, stage["totalDurationMs"])
 
     @mock.patch.object(telemetry.request, "urlopen")
     def test_delivery_shape_and_api_key_header(self, urlopen):
