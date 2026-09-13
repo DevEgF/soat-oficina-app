@@ -1,0 +1,416 @@
+{
+  "name": "Oficina - HML - Aceite Fase 3",
+  "permissions": "PRIVATE",
+  "pages": [
+    {
+      "name": "Negocio",
+      "widgets": [
+        {
+          "title": "OS por dia - ultimos 7 dias (America/Sao_Paulo)",
+          "layout": {
+            "column": 1,
+            "row": 1,
+            "width": 12,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 8439293,
+                "query": "SELECT latest(createdCount) AS 'Criadas', latest(finalizedCount) AS 'Finalizadas', latest(deliveredCount) AS 'Entregues' FROM OficinaBusinessDaily WHERE environment = 'hml' FACET businessDate SINCE 30 minutes ago LIMIT 7"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Tempo medio por etapa (ms) - janela de 7 dias",
+          "layout": {
+            "column": 1,
+            "row": 4,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.bar"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 8439293,
+                "query": "SELECT latest(averageDurationMs) AS 'Media ms' FROM OficinaBusinessStageSnapshot WHERE environment = 'hml' AND sampleCount > 0 FACET stage SINCE 30 minutes ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Amostras por etapa",
+          "layout": {
+            "column": 7,
+            "row": 4,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 8439293,
+                "query": "SELECT latest(sampleCount) AS 'OS' FROM OficinaBusinessStageSnapshot WHERE environment = 'hml' FACET stage SINCE 30 minutes ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Falhas tecnicas de processamento registradas",
+          "layout": {
+            "column": 1,
+            "row": 7,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 8439293,
+                "query": "SELECT sum(WorkOrderProcessingFailures) FROM Log WHERE cluster_name = 'oficina-oci' AND namespace_name = 'hml' AND WorkOrderProcessingFailures IS NOT NULL FACET Operation SINCE 8 hours ago TIMESERIES"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Coleta de negocio - heartbeat (1 = recebido)",
+          "layout": {
+            "column": 7,
+            "row": 7,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.billboard"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 8439293,
+                "query": "SELECT latest(healthy) AS 'Coleta ativa' FROM OficinaTelemetryHeartbeat WHERE environment = 'hml' SINCE 15 minutes ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Como interpretar",
+          "layout": {
+            "column": 1,
+            "row": 10,
+            "width": 12,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.markdown"
+          },
+          "rawConfiguration": {
+            "text": "Dados reais do Neon, atualizados a cada 5 minutos. Contagens usam latest para evitar duplicacao de snapshots. Sem amostras significa ausencia de dados, nao sucesso comprovado. Etapas: diagnostico = criacao ate diagnostico; aprovacao = envio do orcamento ate aprovacao; execucao = inicio ate finalizacao; finalizacao = finalizacao ate entrega. Homologacao inclui jornada sintetica de aceite. Alertas e entrega de notificacoes exigem evidencia propria."
+          }
+        }
+      ]
+    },
+    {
+      "name": "API e autenticacao",
+      "widgets": [
+        {
+          "title": "API - requisicoes por minuto",
+          "layout": {
+            "column": 1,
+            "row": 1,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 8439293,
+                "query": "SELECT rate(count(*), 1 minute) FROM Transaction WHERE appName = 'oficina-hml' SINCE 8 hours ago TIMESERIES"
+              }
+            ]
+          }
+        },
+        {
+          "title": "API - latencia p50/p95/p99 (ms)",
+          "layout": {
+            "column": 7,
+            "row": 1,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 8439293,
+                "query": "SELECT percentile(duration * 1000, 50, 95, 99) FROM Transaction WHERE appName = 'oficina-hml' SINCE 8 hours ago TIMESERIES"
+              }
+            ]
+          }
+        },
+        {
+          "title": "API - HTTP 4xx e 5xx",
+          "layout": {
+            "column": 1,
+            "row": 4,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 8439293,
+                "query": "SELECT filter(count(*), WHERE `http.statusCode` >= 400 AND `http.statusCode` < 500) AS '4xx', filter(count(*), WHERE `http.statusCode` >= 500) AS '5xx' FROM Transaction WHERE appName = 'oficina-hml' SINCE 8 hours ago TIMESERIES"
+              }
+            ]
+          }
+        },
+        {
+          "title": "API - erros APM (%)",
+          "layout": {
+            "column": 7,
+            "row": 4,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 8439293,
+                "query": "SELECT percentage(count(*), WHERE error IS true) FROM Transaction WHERE appName = 'oficina-hml' SINCE 8 hours ago TIMESERIES"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Auth OCI - respostas por status",
+          "layout": {
+            "column": 1,
+            "row": 7,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 8439293,
+                "query": "SELECT count(*) FROM Log WHERE cluster_name = 'oficina-oci' AND namespace_name = 'hml' AND service = 'oficina-auth' AND statusCode IS NOT NULL FACET statusCode SINCE 8 hours ago TIMESERIES"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Auth OCI - latencia (ms)",
+          "layout": {
+            "column": 7,
+            "row": 7,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 8439293,
+                "query": "SELECT percentile(durationMs, 50, 95, 99) FROM Log WHERE cluster_name = 'oficina-oci' AND namespace_name = 'hml' AND service = 'oficina-auth' AND statusCode IS NOT NULL SINCE 8 hours ago TIMESERIES"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Correlacao - erros recentes (sem corpo de requisicao)",
+          "layout": {
+            "column": 1,
+            "row": 10,
+            "width": 12,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 8439293,
+                "query": "SELECT timestamp, service, level, requestId, `trace.id`, statusCode FROM Log WHERE cluster_name = 'oficina-oci' AND namespace_name = 'hml' AND (level = 'ERROR' OR statusCode >= 500) SINCE 8 hours ago LIMIT 30"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Traces recentes API",
+          "layout": {
+            "column": 1,
+            "row": 13,
+            "width": 12,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 8439293,
+                "query": "SELECT timestamp, name, traceId, duration FROM Transaction WHERE appName = 'oficina-hml' AND traceId IS NOT NULL SINCE 8 hours ago LIMIT 20"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Kubernetes OCI",
+      "widgets": [
+        {
+          "title": "VM - CPU utilizada (cores)",
+          "layout": {
+            "column": 1,
+            "row": 1,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 8439293,
+                "query": "SELECT average(cpuUsedCores) FROM K8sNodeSample WHERE clusterName = 'oficina-oci' FACET nodeName SINCE 8 hours ago TIMESERIES"
+              }
+            ]
+          }
+        },
+        {
+          "title": "VM - memoria working set (MiB)",
+          "layout": {
+            "column": 7,
+            "row": 1,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 8439293,
+                "query": "SELECT average(memoryWorkingSetBytes) / 1048576 FROM K8sNodeSample WHERE clusterName = 'oficina-oci' FACET nodeName SINCE 8 hours ago TIMESERIES"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Deployments - replicas desejadas e prontas",
+          "layout": {
+            "column": 1,
+            "row": 4,
+            "width": 12,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 8439293,
+                "query": "SELECT latest(podsDesired), latest(podsReady), latest(podsMissing) FROM K8sDeploymentSample WHERE clusterName = 'oficina-oci' AND namespaceName = 'hml' FACET deploymentName SINCE 15 minutes ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Pods - readiness",
+          "layout": {
+            "column": 1,
+            "row": 7,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 8439293,
+                "query": "SELECT latest(isReady) FROM K8sPodSample WHERE clusterName = 'oficina-oci' AND namespaceName = 'hml' FACET podName SINCE 15 minutes ago"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Pods - memoria (MiB)",
+          "layout": {
+            "column": 7,
+            "row": 7,
+            "width": 6,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.line"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 8439293,
+                "query": "SELECT average(memoryWorkingSetBytes) / 1048576 FROM K8sPodSample WHERE clusterName = 'oficina-oci' AND namespaceName = 'hml' FACET podName SINCE 8 hours ago TIMESERIES"
+              }
+            ]
+          }
+        },
+        {
+          "title": "Node - Ready e pressao de memoria/disco",
+          "layout": {
+            "column": 1,
+            "row": 10,
+            "width": 12,
+            "height": 3
+          },
+          "visualization": {
+            "id": "viz.table"
+          },
+          "rawConfiguration": {
+            "nrqlQueries": [
+              {
+                "accountId": 8439293,
+                "query": "SELECT latest(`condition.Ready`), latest(`condition.MemoryPressure`), latest(`condition.DiskPressure`) FROM K8sNodeSample WHERE clusterName = 'oficina-oci' FACET nodeName SINCE 15 minutes ago"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

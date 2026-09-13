@@ -1,0 +1,32 @@
+environment: hml
+image:
+  repository: ""
+  digest: ""
+existingSecret: oficina-runtime
+replicaCount: 1
+auth:
+  enabled: false
+  image:
+    repository: ""
+    digest: ""
+resources:
+  requests:
+    cpu: 200m
+    memory: 640Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 2
+  targetCPUUtilizationPercentage: 75
+ingress:
+  enabled: false
+  host: ""
+  tlsSecret: ""
+observability:
+  newRelic:
+    enabled: false
+    existingSecret: newrelic-license
+    region: US

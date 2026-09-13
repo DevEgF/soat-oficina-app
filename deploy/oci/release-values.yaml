@@ -1,0 +1,14 @@
+# Built locally and imported into the single K3s node on 2026-09-12.
+# These names are local containerd references, not public registry publications.
+image:
+  repository: docker.io/library/oficina-oci
+  digest: sha256:a04bdeeb8d553091d6d84b87b29b110e2066afe86ffe6adda3afe7d98d7fff5e
+auth:
+  enabled: true
+  image:
+    repository: docker.io/library/oficina-auth-oci
+    digest: sha256:c60c50aafe014344b9813097bd8cf11d85bf2a23c5d97c283fa4b1684b6e6e24
+observability:
+  newRelic:
+    enabled: true
+    region: US

@@ -1,0 +1,51 @@
+global:
+  cluster: oficina-oci
+  customSecretName: newrelic-license
+  customSecretLicenseKey: licenseKey
+  lowDataMode: true
+  nodeSelector:
+    kubernetes.io/arch: arm64
+newrelic-infrastructure:
+  enabled: true
+  controlPlane:
+    enabled: false
+kube-state-metrics:
+  enabled: true
+  metricLabelsAllowlist:
+    - pods=[app.kubernetes.io/name,oficina.environment]
+  metricAnnotationsAllowList: []
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+nri-metadata-injection:
+  enabled: false
+nri-kube-events:
+  enabled: true
+newrelic-logging:
+  enabled: true
+  # The node log reader requires access to host log labels on SELinux hosts.
+  # Scope this to Fluent Bit; application namespaces remain restricted.
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop: [ALL]
+    seLinuxOptions:
+      type: spc_t
+  fluentBit:
+    path: /var/log/containers/*_hml_*.log,/var/log/containers/*_prod_*.log
+    db: /var/lib/oficina-fluentbit/flb_kube.db
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+newrelic-pixie:
+  enabled: false
+pixie-chart:
+  enabled: false
+nr-ebpf-agent:
+  enabled: false

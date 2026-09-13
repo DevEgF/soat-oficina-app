@@ -1,0 +1,25 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: oficina-tls
+  namespace: hml
+spec:
+  secretName: oficina-tls
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+  dnsNames:
+    - hml.129.213.121.122.sslip.io
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: oficina-tls
+  namespace: prod
+spec:
+  secretName: oficina-tls
+  issuerRef:
+    name: letsencrypt-production
+    kind: ClusterIssuer
+  dnsNames:
+    - oficina.129.213.121.122.sslip.io

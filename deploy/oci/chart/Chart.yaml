@@ -1,0 +1,6 @@
+apiVersion: v2
+name: oficina-oci
+description: Oficina on OCI K3s with externally provisioned Neon configuration
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
