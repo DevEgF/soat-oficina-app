@@ -91,11 +91,12 @@ def query_aggregates(config, environment):
     process_env.update({
         "PGHOST": str(config["host"]), "PGPORT": str(config["port"]),
         "PGDATABASE": str(config["database"]), "PGUSER": str(config["user"]),
-        "PGPASSWORD": str(config["password"]), "PGSSLMODE": "verify-full",
+        "PGSSLMODE": "verify-full",
         "PGSSLROOTCERT": "/etc/pki/tls/certs/ca-bundle.crt",
         "PGOPTIONS": ("-c default_transaction_read_only=on -c statement_timeout=15000 "
                       f"-c search_path={environment}"),
     })
+    process_env["PGPASSWORD"] = str(config["password"])
     result = subprocess.run(
         ["psql", "--no-psqlrc", "--quiet", "--tuples-only", "--no-align",
          "--set", "ON_ERROR_STOP=1"], input=AGGREGATE_SQL.encode(),
