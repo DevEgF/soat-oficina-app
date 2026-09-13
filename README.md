@@ -74,7 +74,7 @@ $env:SPRING_PROFILES_ACTIVE='local'
 ./oficina/gradlew -p oficina bootRun
 ```
 
-Configure `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME` e `SPRING_DATASOURCE_PASSWORD` para seu banco local. O frontend usa `npm ci` e `npm run dev` em `frontend/`; veja [a configuração dos dois clientes HTTP](https://github.com/DevEgF/soat-oficina-app/blob/develop/frontend/README.md). A Lambda de autenticação fica em `soat-oficina-auth`; não existe `/auth/token` no processo Spring local.
+Configure `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME` e `SPRING_DATASOURCE_PASSWORD` para seu banco local. O frontend usa `npm ci` e `npm run dev` em `frontend/`; veja [a configuração dos dois clientes HTTP](https://github.com/DevEgF/soat-oficina-app/blob/develop/frontend/README.md). A autenticação de cliente fica no repositório `soat-oficina-auth` (Lambda na AWS ou adaptador HTTP na OCI); não existe `/auth/token` no processo Spring local.
 
 Credenciais padrão são permitidas apenas quando todos os perfis ativos são `local` ou `test`. O ambiente implantado usa o perfil `docker`, exige JWT e as cinco senhas staff externas e rejeita padrões conhecidos, inclusive em combinações `docker,test`. Os usuários são `master`, `admin`, `atendente`, `tecnico` e `almoxarife`; senhas de AWS nunca ficam no repositório.
 
