@@ -137,7 +137,7 @@ O ensaio de alerta contou logs de auth hml, agrupados por statusCode, com limite
 | Rollback | Mudança de CPU request e restauração Helm preservando OS e digests; não foi rollback de binário |
 | Observabilidade | Logs, transações, spans, métricas Kubernetes, etapas e contagens de negócio nos dashboards |
 | HTTPS | Dois hosts públicos, certificados válidos e redirecionamento HTTP |
-| Vídeo | Gravado com todos os requisitos, conforme confirmação do responsável; link não informado |
+| Vídeo | [Gravado com todos os requisitos](https://drive.google.com/file/d/1OGqlACabTZnHzdbG0k2q0ttf29OQkWOF/view?usp=sharing), conforme confirmação do responsável |
 
 K3s possui um único nó e não oferece alta disponibilidade entre nós. Auth HTTP é container, não função serverless; a implementação Lambda permanece preservada. O frontend não está empacotado no chart OCI. Imagens estão importadas no containerd: registry remoto e CI/CD automático OCI continuam sem execução completa. Schemas compartilham usuário proprietário; isolamento forte requer papéis/grants próprios. Helm não desfaz migrações: usar mudanças aditivas e planejar backup/restauração separadamente.
 
