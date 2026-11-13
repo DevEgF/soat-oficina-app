@@ -12,7 +12,7 @@ class ReleasedDependenciesTest {
 		val settings = File("settings.gradle.kts").readText()
 		assertFalse(build.contains("SNAPSHOT"))
 		assertFalse(settings.contains("repo.spring.io/snapshot"))
-		assertTrue(build.contains("""id("org.springframework.boot") version "4.1.1"""))
+		assertTrue(build.contains("""id("org.springframework.boot") version "4.1.2"""))
 		assertTrue(build.contains("""kotlin("jvm") version "2.4.10"""))
 	}
 }
