@@ -8,5 +8,3 @@
 /dataSources.local.xml
 # Editor-based HTTP Client requests
 /httpRequests/
-# Claude Code plugin tab/session state (per-machine, not project config)
-/claudeCodeTabState.xml
