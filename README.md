@@ -1,5 +1,19 @@
 # Oficina - Fase 3
 
+## Fase 4: arquitetura de microsserviços
+
+Este repositório é o monólito das fases 1 a 3 e fica preservado como referência de onde o código saiu. Na Fase 4 a aplicação foi dividida em três microsserviços, cada um com repositório, banco e pipeline próprios, coordenados por uma saga orquestrada sobre RabbitMQ:
+
+| Repositório | Responsabilidade | Banco |
+|---|---|---|
+| [soat-oficina-os-service](https://github.com/DevEgF/soat-oficina-os-service) | Ordem de serviço, clientes, veículos, histórico, login de staff e orquestração da saga | PostgreSQL |
+| [soat-oficina-billing-service](https://github.com/DevEgF/soat-oficina-billing-service) | Catálogo, orçamento, decisão do cliente, pagamento pelo Mercado Pago e estorno | PostgreSQL |
+| [soat-oficina-execution-service](https://github.com/DevEgF/soat-oficina-execution-service) | Fila de execução, diagnóstico, reparo e finalização | MongoDB |
+
+O serviço de autenticação de clientes ([soat-oficina-auth](https://github.com/DevEgF/soat-oficina-auth)) passou a consultar clientes pelo OS Service, e o ambiente completo roda em um cluster kind local descrito em [soat-oficina-infra-k8s](https://github.com/DevEgF/soat-oficina-infra-k8s/tree/develop). A escolha pela orquestração e as compensações estão no [README do OS Service](https://github.com/DevEgF/soat-oficina-os-service/tree/develop#saga).
+
+O conteúdo abaixo descreve a Fase 3.
+
 ## Por que trocamos AWS por Oracle?
 
 **A troca foi motivada por custo e continuidade da aplicação.** Depois da demonstração na AWS, a conta foi encerrada para evitar custos recorrentes de EKS, máquinas, RDS e rede. Aproveitamos a VM Oracle já disponível, com 2 OCPUs e 12 GB, para manter a API acessível usando K3s. O PostgreSQL foi mantido no Neon para não disputar os recursos dessa VM com a aplicação, e a observabilidade ficou no New Relic.
