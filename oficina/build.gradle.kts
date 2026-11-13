@@ -1,17 +1,13 @@
 plugins {
 	kotlin("jvm") version "2.4.10"
 	kotlin("plugin.spring") version "2.4.10"
-	id("org.springframework.boot") version "4.1.1"
+	id("org.springframework.boot") version "4.1.2"
 	id("io.spring.dependency-management") version "1.1.7"
 	jacoco
 }
 
 group = "com.soat.tech.challenge.oficina"
 version = "0.0.1"
-
-// Security fixes beyond the Spring Boot 4.1.1 BOM; keep embedded Tomcat modules aligned.
-// https://tomcat.apache.org/security-11.html#Fixed_in_Apache_Tomcat_11.0.25
-extra["tomcat.version"] = "11.0.25"
 
 java {
 	toolchain {
